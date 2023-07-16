@@ -1,8 +1,10 @@
 import pygame as pg
+import pytiled_parser
 
 from constants import *
 
 import time
+import math
 import asyncio
 from pathlib import Path
 
@@ -10,6 +12,7 @@ import os; os.chdir(os.path.dirname(__file__))
 
 
 # Settings
+max_fps = 0  # Put 0 for no fps limit
 target_fps = 60
 target_dt = 1/target_fps
 fixed_timestep_settings = {
@@ -63,13 +66,13 @@ class Sprite:
     @property
     def rect(self):
         """The actual rect of the sprite. Useful for collision detection and more."""
-        return pg.Rect(*self.pos, *self.size)
+        return pg.Rect(round(self.pos[0]), round(self.pos[1]), round(self.size[0]), round(self.size[1]))
     
     @property
     def draw_rect(self) -> pg.Rect:
         """The rect of the surface that will be drawn."""
         rect = self.surface.get_rect()
-        rect.topleft = self.pos
+        rect.topleft = [round(self.pos[0]), round(self.pos[1])]
         rect.x += self.draw_rect_offset[0]
         rect.y += self.draw_rect_offset[1]
         return rect
@@ -81,15 +84,21 @@ class Sprite:
         pass
 
     def draw(self):
-        draw_pos = relative_to_camera(self.pos, self.engine.camera_position)
-        draw_pos[0] += self.draw_rect_offset[0]
-        draw_pos[1] += self.draw_rect_offset[1]
-
         draw_rect_to_cam = self.draw_rect
         draw_rect_to_cam.topleft = relative_to_camera(draw_rect_to_cam.topleft, self.engine.camera_position)
 
-        if self.on_screen(draw_rect_to_cam):
-            self.screen.blit(self.surface, draw_pos)
+        if not self.angle == 0:
+            surface = pg.transform.rotate(self.surface, self.angle)
+            rect = surface.get_rect()
+            rect.center = draw_rect_to_cam.center
+            pos = rect.topleft
+        else:
+            surface = self.surface
+            rect = draw_rect_to_cam
+            pos = draw_rect_to_cam.topleft
+
+        if self.on_screen(rect):
+            self.screen.blit(surface, pos)
 
 
 class Player(Sprite):
@@ -100,17 +109,56 @@ class Player(Sprite):
         self.surfaces.append(self.surface)
         self.surfaces.append(pg.transform.flip(self.surface, True, False))
 
-        self.pos = [0,0]
+        self.pos = pg.math.Vector2(0,0)
         self.hitbox_rect = load_image(Path("assets/player/hitbox.png")).get_bounding_rect()
         self.size = list(self.hitbox_rect.size)
         self.draw_rect_offset = -self.hitbox_rect.topleft[0], -self.hitbox_rect.topleft[1]
 
-        self.collisions = None
+        self.collisions = {"top": False, "left": False, "right": False, "bottom": False}
         self.face_direction = RIGHT_FACING
 
+        self.can_jump = True
+        self.stop_jump = False
+        self.jump_count = 0
+        self.gravity = 1
+
         self.old_pos = list(self.pos)
+        self.sounds = {}
+        self.sounds["jump"] = pg.mixer.Sound(Path("assets/sounds/jump.wav"))
+        self.god_mode = False
+        self.on_slope = False
+    
+    def move_on_god_mode(self):
+        speed = 18
+        if self.engine.keys["right"] and not self.engine.keys["left"]: self.change_x = speed
+        elif self.engine.keys["left"] and not self.engine.keys["right"]: self.change_x = -speed
+        else: self.change_x = 0
+        if self.engine.keys["down"] and not self.engine.keys["up"]: self.change_y = speed
+        elif self.engine.keys["up"] and not self.engine.keys["down"]: self.change_y = -speed
+        else: self.change_y = 0
 
     def move_on_inputs(self):
+        if self.god_mode:
+            self.move_on_god_mode()
+            return
+        self.can_jump = self.collisions["bottom"]
+
+        if not self.engine.keys["up"]:
+            if self.can_jump:
+                self.stop_jump = False
+                self.jump_count = 0
+            else:
+                self.stop_jump = True
+
+        if (self.can_jump or self.jump_count > 0) \
+            and self.jump_count < 9 \
+            and self.engine.keys["up"] \
+            and not self.stop_jump:
+            self.change_y = -13
+            if self.jump_count == 0:
+                self.sounds["jump"].play()
+            self.jump_count += 1
+
         speed = 8
         if self.engine.keys["right"] and not self.engine.keys["left"]:
             self.change_x = speed
@@ -119,9 +167,6 @@ class Player(Sprite):
         else:
             self.change_x = 0
 
-        if self.engine.keys["up"] and self.collisions["bottom"]:
-            self.change_y = -18
-
     def get_collisions(self, tiles):
         hit_list = []
         for tile in tiles:
@@ -129,7 +174,11 @@ class Player(Sprite):
                 hit_list.append(tile)
         return hit_list
 
-    def apply_physics(self):
+    def apply_collisions(self):
+        if self.on_slope and not self.change_y < 0:
+            self.change_y += 10
+        self.change_y += self.gravity
+        if self.change_y > 30: self.change_y = 30
         self.collisions = {"top": False, "left": False, "right": False, "bottom": False}
 
         self.pos[0] += self.change_x
@@ -137,12 +186,21 @@ class Player(Sprite):
         rect = self.rect
         for tile in hit_list:
             if not tile.shape_type in ("slope1", "slope2"):
-                if self.change_x > 0:
+                if self.change_x > 0 and rect.right>=tile.rect.left and rect.left<=tile.rect.left:
                     rect.right = tile.rect.left
                     self.collisions["right"] = True
-                elif self.change_x < 0:
+                elif self.change_x < 0 and tile.rect.right>=rect.left and tile.rect.left<=rect.left:
                     rect.left = tile.rect.right
                     self.collisions["left"] = True
+            else:
+                if tile.shape_type == "slope1":
+                    if self.change_x < 0 and tile.rect.right>=rect.left and tile.rect.left<=rect.left:
+                        rect.left = tile.rect.right
+                        self.collisions["left"] = True
+                elif tile.shape_type == "slope2":
+                    if self.change_x > 0 and rect.right>=tile.rect.left and rect.left<=tile.rect.left:
+                        rect.right = tile.rect.left
+                        self.collisions["right"] = True
         self.pos = list(rect.topleft)
 
         self.pos[1] += self.change_y
@@ -150,16 +208,22 @@ class Player(Sprite):
         rect = self.rect
         for tile in hit_list:
             if not tile.shape_type in ("slope1", "slope2"):
-                if self.change_y > 0:
+                if self.change_y > 0 and tile.rect.top<=rect.bottom and tile.rect.bottom>=rect.bottom:
                     rect.bottom = tile.rect.top
                     self.collisions["bottom"] = True
-                elif self.change_y < 0:
+                elif self.change_y < 0 and rect.top<=tile.rect.bottom and rect.bottom>=tile.rect.bottom:
                     rect.top = tile.rect.bottom
                     self.collisions["top"] = True
+            else:
+                if tile.shape_type in ("slope1", "slope2"):
+                    if self.change_y < 0 and rect.top<=tile.rect.bottom and rect.bottom>=tile.rect.bottom:
+                        rect.top = tile.rect.bottom
+                        self.collisions["top"] = True
         self.pos = list(rect.topleft)
-
+        
+        self.on_slope = False
         hit_list = self.get_collisions(self.engine.tiles)
-        rect = self.rect
+        rect = self.rect 
         for tile in hit_list:
             if tile.shape_type in ("slope1", "slope2"):
                 if tile.shape_type == "slope1":
@@ -176,22 +240,18 @@ class Player(Sprite):
                 if rect.bottom > target_y:
                     rect.bottom = target_y
                     self.collisions["bottom"] = True
+                    self.on_slope = True
         self.pos = list(rect.topleft)
-        
+
         if self.collisions["bottom"] or self.collisions["top"]:
             self.change_y = 0
 
     def update(self):
         self.old_pos = list(self.pos)
+        self.god_mode = self.engine.keys["g"]
+        
         self.move_on_inputs()
-
-        self.change_y += 1
-        if self.change_y > 30: self.change_y = 30
-
-        # self.pos[0] += self.change_x
-        self.apply_physics()
-        # self.pos[1] += self.change_y
-        # self.update_physics(False)
+        self.apply_collisions()
 
         if self.change_x > 0:
             self.face_direction = RIGHT_FACING
@@ -240,44 +300,34 @@ class Engine:
             "left": False,
             "up": False,
             "down": False,
+            "g": False
         }
         self.player = Player(self.screen)
         self.camera_position = list(self.player.rect.center)
 
-        tilemap = [
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,3,4,0,0,0,2,2,0,
-            0,0,0,0,0,0,0,0,3,2,2,4,0,0,0,0,0,
-            0,0,0,0,0,0,3,2,2,2,2,2,2,2,2,2,2,
-            1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-            1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
-        ]
-        tilemap_width = 17
-        tilemap_height = 7
+        tilemap = pytiled_parser.parse_map(Path("assets/tilemap_project/tilemaps/basic_tilemap1.json"))
+        id_to_tiles = {}
+        for firstgid, tileset in tilemap.tilesets.items():
+            for tileid, tile in tileset.tiles.items():
+                id_to_tiles[tileid+firstgid] = tile
+        
+        layers_dict = {layer.name:layer for layer in tilemap.layers}
+
+        tilemap = layers_dict["Walls"].data
         tile_size = 16
         self.tiles = []
-        i = 0
-        for y in range(tilemap_height):
-            for x in range(tilemap_width):
-                if not tilemap[i] == 0:
-                    if tilemap[i] == 1: 
-                        tile_object = Sprite(self.screen, Path("assets/tiles/brick.png"))
-                    elif tilemap[i] == 2: 
-                        tile_object = Sprite(self.screen, Path("assets/tiles/stone.png"))
-                    elif tilemap[i] == 3: 
-                        tile_object = Sprite(self.screen, Path("assets/tiles/wood_slope1.png"))
+        for y, row in enumerate(tilemap):
+            for x, num in enumerate(row):
+                if num == 0: continue
+                tile = id_to_tiles[num]
+                tile_object = Sprite(self.screen, tile.image)
+                tile_object.pos = x*tile_size*SCALE, y*tile_size*SCALE
+                if tile.properties:
+                    if tile.properties.get("shape_type") == "slope1":
                         tile_object.shape_type = "slope1"
-                    elif tilemap[i] == 4: 
-                        tile_object = Sprite(self.screen, Path("assets/tiles/wood_slope2.png"))
+                    elif tile.properties.get("shape_type") == "slope2":
                         tile_object.shape_type = "slope2"
-                    else: 
-                        raise Exception("Invalid tile ID")
-
-                    tile_object.pos = x*tile_size*SCALE, y*tile_size*SCALE
-
-                    self.tiles.append(tile_object)
-                i += 1
+                self.tiles.append(tile_object)
 
     def handle_events(self):
         for event in pg.event.get():
@@ -290,6 +340,7 @@ class Engine:
                     case pg.K_a | pg.K_LEFT: self.keys["left"] = True
                     case pg.K_d | pg.K_RIGHT: self.keys["right"] = True
                     case pg.K_f: self.enable_debug_text = not self.enable_debug_text
+                    case pg.K_g: self.keys["g"] = not self.keys["g"]
             elif event.type == pg.KEYUP:
                 match event.key:
                     case pg.K_w | pg.K_UP | pg.K_SPACE: self.keys["up"] = False
@@ -319,11 +370,17 @@ class Engine:
         # rect.topleft = relative_to_camera(rect.topleft, self.camera_position)
         # pg.draw.rect(self.screen, (255,0,0), rect, 2)
 
-        self.reset_debug_text()
-        self.debug_text("FPS", self.fps)
-        self.debug_text("Updates per frame", self.updates_per_frame)
-        self.debug_text("Change x", self.player.change_x)
-        self.debug_text("Change y", self.player.change_y)
+        if self.enable_debug_text:
+            self.reset_debug_text()
+            self.debug_text("FPS", self.fps)
+            self.debug_text("Updates per frame", self.updates_per_frame)
+            self.debug_text("Change x", self.player.change_x)
+            self.debug_text("Change y", self.player.change_y)
+            self.debug_text("Can jump", self.player.can_jump)
+            self.debug_text("Collisions", self.player.collisions)
+            self.debug_text("On Slope", self.player.on_slope)
+            self.debug_text("Jump Count", self.player.jump_count)
+            self.debug_text("Up", self.keys["up"])
 
     def debug_text(self, item, value, round_floats=True):
         if isinstance(value, float) and round_floats:
@@ -345,9 +402,9 @@ class Engine:
         while self.running:
             if fixed_timestep_settings["enable"]:
                 if fixed_timestep_settings["busy_loop"]:
-                    self.dt = self.clock.tick_busy_loop()/1000
+                    self.dt = self.clock.tick_busy_loop(max_fps)/1000
                 else:
-                    self.dt = self.clock.tick()/1000
+                    self.dt = self.clock.tick(max_fps)/1000
                 if self.dt == 0:
                     self.fps = "infinite"
                 else:
@@ -355,13 +412,13 @@ class Engine:
 
                 self.accumulator += self.dt
                 self.updates_per_frame = 0
-                while self.accumulator >= 1/60:
+                while self.accumulator >= target_dt:
                     self.update()
-                    self.accumulator -= 1/60
+                    self.accumulator -= target_dt
                     self.updates_per_frame += 1
                     self.position_camera()
 
-                alpha = self.accumulator / (1/60)
+                alpha = self.accumulator/target_dt
                 old = self.camera_position
                 self.camera_position = [
                     lerp(self.old_camera_position[0], self.camera_position[0], alpha),
@@ -373,7 +430,7 @@ class Engine:
                 pg.display.flip()
                 await asyncio.sleep(0)
             else:
-                dt = self.clock.tick(60)/1000
+                self.dt = self.clock.tick(max_fps)/1000
                 if self.dt == 0:
                     self.fps = "infinite"
                 else:
