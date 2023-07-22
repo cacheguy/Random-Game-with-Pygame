@@ -9,13 +9,7 @@ import random
 import time
 
 
-# class Group(pg.sprite.Group):
-#     def draw(self, surface, bgsurf=None, special_flags=0):
-#         sprites = self.sprites()
-#         for sprite in sprites:
-#             sprite.draw()
-
-class Sprite():
+class Sprite:
     engine = None
     def __init__(self, surface: pg.Surface=None):
         self.screen = self.engine.screen
@@ -38,16 +32,16 @@ class Sprite():
             self.surface = None
             self.size = [0,0]
 
+        self.spritelists = []
+
     @classmethod
     def set_engine(cls, engine):
         cls.engine = engine
 
-    @property
-    def rect(self):
+    def rect(self) -> pg.Rect:
         """The actual rect of the sprite. Useful for collision detection and more."""
         return pg.Rect(round(self.pos[0]), round(self.pos[1]), round(self.size[0]), round(self.size[1]))
     
-    @property
     def draw_rect(self) -> pg.Rect:
         """The rect of the surface that will be drawn."""
         rect = self.surface.get_rect()
@@ -63,7 +57,7 @@ class Sprite():
         pass
 
     def draw(self):
-        draw_rect_to_cam = self.draw_rect
+        draw_rect_to_cam = self.draw_rect()
         draw_rect_to_cam.topleft = relative_to_camera(draw_rect_to_cam.topleft, self.engine.camera_position)
 
         if not self.angle == 0:
@@ -79,11 +73,16 @@ class Sprite():
         if self.on_screen(rect):
             self.screen.blit(surface, pos)
 
+    def add_spritelist(self, spritelist):
+        self.spritelists.append(spritelist)
+
+    def remove_spritelist(self, spritelist):
+        self.spritelists.remove(spritelist)
+
 
 class Tile(Sprite):
-    def __init__(self, layer, surface: pg.Surface, pos=[0,0], properties={}, animated=False):
+    def __init__(self, surface: pg.Surface, pos=[0,0], properties={}, animated=False):
         super().__init__(surface)
-        self.layer = layer
         self.properties = properties
         self.tile_type = self.properties.get("tile_type")
         self.animated = animated
@@ -93,7 +92,8 @@ class Tile(Sprite):
         pass
 
     def kill(self):
-        self.layer.remove(self)
+        for spritelist in self.spritelists.copy():
+            spritelist.remove(self)
 
 
 class MovingTile(Sprite): pass
@@ -199,7 +199,7 @@ class Player(Sprite):
     def get_collisions(self, tiles):
         hit_list = []
         for tile in tiles:
-            if self.rect.colliderect(tile):
+            if self.rect().colliderect(tile):
                 hit_list.append(tile)
         return hit_list
 
@@ -212,15 +212,15 @@ class Player(Sprite):
         walls = self.engine.tilemap.layers["Walls"]
 
         self.pos[0] += self.change_x
-        hit_list = self.get_collisions(self.engine.tilemap.get_nearby_tiles_at(self.pos))
-        rect = self.rect
+        hit_list = self.get_collisions(walls.get_nearby_tiles_at(self.rect()))
+        rect = self.rect()
         for tile in hit_list:
             if not tile.shape_type in ("slope1", "slope2"):
-                if self.change_x > 0 and rect.right>=tile.rect.left and rect.left<=tile.rect.left:
-                    rect.right = tile.rect.left
+                if self.change_x > 0 and rect.right>=tile.rect().left and rect.left<=tile.rect().left:
+                    rect.right = tile.rect().left
                     self.collisions["right"] = True
-                elif self.change_x < 0 and tile.rect.right>=rect.left and tile.rect.left<=rect.left:
-                    rect.left = tile.rect.right
+                elif self.change_x < 0 and tile.rect().right>=rect.left and tile.rect().left<=rect.left:
+                    rect.left = tile.rect().right
                     self.collisions["left"] = True
             else: 
                 pass
@@ -229,48 +229,48 @@ class Player(Sprite):
                 # walk off slope1 tiles. Will fix later. For now, make sure there is a normal tile next to a slope tile
 
                 # if tile.shape_type == "slope1":
-                #     if self.change_x < 0 and tile.rect.right>=rect.left and tile.rect.left<=rect.left:
-                #         rect.left = tile.rect.right
+                #     if self.change_x < 0 and tile.rect().right>=rect.left and tile.rect().left<=rect.left:
+                #         rect.left = tile.rect().right
                 #         self.collisions["left"] = True
                 # elif tile.shape_type == "slope2":
-                #     if self.change_x > 0 and rect.right>=tile.rect.left and rect.left<=tile.rect.left:
-                #         rect.right = tile.rect.left
+                #     if self.change_x > 0 and rect.right>=tile.rect().left and rect.left<=tile.rect().left:
+                #         rect.right = tile.rect().left
                 #         self.collisions["right"] = True
         self.pos = list(rect.topleft)
 
         self.pos[1] += self.change_y
-        hit_list = self.get_collisions(self.engine.tilemap.get_nearby_tiles_at(self.pos))
-        rect = self.rect
+        hit_list = self.get_collisions(walls.get_nearby_tiles_at(self.rect()))
+        rect = self.rect()
         for tile in hit_list:
             if not tile.shape_type in ("slope1", "slope2"):
-                if self.change_y > 0 and tile.rect.top<=rect.bottom and tile.rect.bottom>=rect.bottom:
-                    rect.bottom = tile.rect.top
+                if self.change_y > 0 and tile.rect().top<=rect.bottom and tile.rect().bottom>=rect.bottom:
+                    rect.bottom = tile.rect().top
                     self.collisions["bottom"] = True
-                elif self.change_y < 0 and rect.top<=tile.rect.bottom and rect.bottom>=tile.rect.bottom:
-                    rect.top = tile.rect.bottom
+                elif self.change_y < 0 and rect.top<=tile.rect().bottom and rect.bottom>=tile.rect().bottom:
+                    rect.top = tile.rect().bottom
                     self.collisions["top"] = True
             else:
                 if tile.shape_type in ("slope1", "slope2"):
-                    if self.change_y < 0 and rect.top<=tile.rect.bottom and rect.bottom>=tile.rect.bottom:
-                        rect.top = tile.rect.bottom
+                    if self.change_y < 0 and rect.top<=tile.rect().bottom and rect.bottom>=tile.rect().bottom:
+                        rect.top = tile.rect().bottom
                         self.collisions["top"] = True
         self.pos = list(rect.topleft)
         
         self.on_slope = False
-        hit_list = self.get_collisions(self.engine.tilemap.get_nearby_tiles_at(self.pos))
-        rect = self.rect 
+        hit_list = self.get_collisions(walls.get_nearby_tiles_at(self.rect()))
+        rect = self.rect()
         for tile in hit_list:
             if tile.shape_type in ("slope1", "slope2"):
                 if tile.shape_type == "slope1":
-                    pos_height = rect.right - tile.rect.left
+                    pos_height = rect.right - tile.rect().left
                 elif tile.shape_type == "slope2":
-                    pos_height = tile.rect.right - rect.left
+                    pos_height = tile.rect().right - rect.left
                 
                 # Add constraints
-                pos_height = min(pos_height, tile.rect.height)
+                pos_height = min(pos_height, tile.rect().height)
                 pos_height = max(pos_height, 0)
 
-                target_y = tile.rect.bottom - pos_height
+                target_y = tile.rect().bottom - pos_height
 
                 if rect.bottom > target_y:
                     rect.bottom = target_y
@@ -288,8 +288,8 @@ class Player(Sprite):
         hit_list = self.get_collisions(self.engine.tilemap.layers["Objects"]) 
         for obj in hit_list:
             if obj.tile_type == "spring":
-                rect = self.rect
-                rect.bottom = obj.rect.top
+                rect = self.rect()
+                rect.bottom = obj.rect().top
                 self.pos = list(rect.topleft)
                 self.change_y = -32
                 self.jump_count = MAX_JUMP_COUNT

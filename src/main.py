@@ -18,7 +18,7 @@ class Engine:
         pg.init()
 
         Sprite.set_engine(self)
-        self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), vsync=False)
         pg.display.set_caption(TITLE)
         self.clock = pg.time.Clock()
         self.font = pg.font.SysFont("calibri", size=32)
@@ -41,12 +41,16 @@ class Engine:
             "down": False,
             "g": False
         }
-        self.player = Player()
-        self.camera_position = [0,0]
-        self.old_camera_position = [0,0]
-        self.position_camera()  # Actual camera positions are set here
 
         self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap2.json"))
+        self.player = Player()
+        rect = self.player.rect()
+        rect.centerx = self.tilemap.spawn_point[0]
+        rect.bottom = self.tilemap.spawn_point[1]
+        self.player.pos = list(rect.topleft)
+        self.camera_position = [0,0]
+        self.old_camera_position = [0,0]
+        self.position_camera(speed=1)  # Actual camera positions are set here
 
     def handle_events(self):
         for event in pg.event.get():
@@ -71,10 +75,10 @@ class Engine:
     def quit(self):
         self.running = False
 
-    def position_camera(self):
+    def position_camera(self, speed=0.17):
         self.old_camera_position = list(self.camera_position)
-        self.camera_position[0] = lerp(self.camera_position[0]+SCREEN_WIDTH/2, self.player.rect.centerx, 0.17)
-        self.camera_position[1] = lerp(self.camera_position[1]+SCREEN_HEIGHT/2, self.player.rect.centery, 0.17)
+        self.camera_position[0] = lerp(self.camera_position[0]+SCREEN_WIDTH/2, self.player.rect().centerx, speed)
+        self.camera_position[1] = lerp(self.camera_position[1]+SCREEN_HEIGHT/2, self.player.rect().centery, speed)
         self.camera_position[0] -= SCREEN_WIDTH / 2
         self.camera_position[1] -= SCREEN_HEIGHT / 2
 
@@ -91,20 +95,26 @@ class Engine:
         #     grid_pos = relative_to_camera(tile.pos, self.camera_position)
         #     pg.draw.rect(self.screen, (0,255,0), pg.Rect(grid_pos, (64,64)), 2)
 
-        # rect = self.player.rect
-        # rect.topleft = relative_to_camera(rect.topleft, self.camera_position)
-        # pg.draw.rect(self.screen, (0,255,0), rect, 2)
-        
+
         # rect = self.player.draw_rect
         # rect.topleft = relative_to_camera(rect.topleft, self.camera_position)
         # pg.draw.rect(self.screen, (255,0,0), rect, 2)
+        offsets = get_offsets_from_rect(self.player.rect(), 16*SCALE)
+
+        for offset in offsets:
+            pg.draw.rect(self.screen, (0,255,0), pg.Rect(relative_to_camera([self.player.pos[0]//64*64+offset[0]*64, self.player.pos[1]//64*64+offset[1]*64], self.camera_position), [64,64]), 2)
+        rect = self.player.rect()
+        rect.topleft = relative_to_camera(rect.topleft, self.camera_position)
+        pg.draw.rect(self.screen, (255,0,0), rect, 2)
 
         if self.enable_debug_text:
             self.reset_debug_text()
             self.debug_text("FPS", self.fps)
             self.debug_text("Updates per frame", self.updates_per_frame)
-            self.debug_text("Change x", self.player.change_x)
-            self.debug_text("Change y", self.player.change_y)
+            # self.debug_text("Change x", self.player.change_x)
+            # self.debug_text("Change y", self.player.change_y)
+            self.debug_text("Y position", self.player.pos[1])
+            self.debug_text("X position", self.player.pos[0])
             self.debug_text("Can jump", self.player.can_jump)
             self.debug_text("Collisions", self.player.collisions)
             self.debug_text("On Slope", self.player.on_slope)

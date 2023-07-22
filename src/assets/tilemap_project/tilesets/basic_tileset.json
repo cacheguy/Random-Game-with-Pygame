@@ -8,9 +8,9 @@
  "margin":0,
  "name":"basic_tileset",
  "spacing":0,
- "tilecount":6,
+ "tilecount":7,
  "tiledversion":"1.10.1",
- "tileheight":16,
+ "tileheight":24,
  "tiles":[
         {
          "id":0,
@@ -71,8 +71,20 @@
                  "type":"string",
                  "value":"coin"
                 }]
+        }, 
+        {
+         "id":6,
+         "image":"..\/..\/enemy\/idle1.png",
+         "imageheight":24,
+         "imagewidth":24,
+         "properties":[
+                {
+                 "name":"tile_type",
+                 "type":"string",
+                 "value":"green_ninja"
+                }]
         }],
- "tilewidth":16,
+ "tilewidth":24,
  "type":"tileset",
  "version":"1.10"
 }
