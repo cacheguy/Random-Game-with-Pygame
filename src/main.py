@@ -44,10 +44,7 @@ class Engine:
 
         self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap2.json"))
         self.player = Player()
-        rect = self.player.rect()
-        rect.centerx = self.tilemap.spawn_point[0]
-        rect.bottom = self.tilemap.spawn_point[1]
-        self.player.pos = list(rect.topleft)
+        self.player.centerx, self.player.bottom = self.tilemap.spawn_point
         self.camera_position = [0,0]
         self.old_camera_position = [0,0]
         self.position_camera(speed=1)  # Actual camera positions are set here
@@ -89,8 +86,8 @@ class Engine:
         # grid_pos = self.player.pos[0]//64*64, self.player.pos[1]//64*64
         # grid_pos = relative_to_camera(grid_pos, self.camera_position)
         # pg.draw.rect(self.screen, (0,0,255), pg.Rect(grid_pos, (64,64)), 2)
-
         # tiles = self.tilemap.get_nearby_tiles_at(self.player.pos)
+
         # for tile in tiles:
         #     grid_pos = relative_to_camera(tile.pos, self.camera_position)
         #     pg.draw.rect(self.screen, (0,255,0), pg.Rect(grid_pos, (64,64)), 2)

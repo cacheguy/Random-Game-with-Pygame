@@ -36,7 +36,7 @@ def relative_to_camera(pos, camera_position):
     return [pos[0] - camera_position[0], pos[1] - camera_position[1]]
 
 def lerp(num1, num2, alpha):
-    return num1 + (alpha * (num2 - num1))\
+    return num1 + (alpha * (num2 - num1))
 
 def get_offsets_from_rect(rect: pg.Rect, tile_size: int):
     grid_left = rect.left//tile_size-rect.topleft[0]//tile_size

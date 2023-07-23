@@ -38,6 +38,60 @@ class Sprite:
     def set_engine(cls, engine):
         cls.engine = engine
 
+    @property
+    def left(self):
+        return self.rect().left
+    @left.setter
+    def left(self, value):
+        rect = self.rect()
+        rect.left = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def right(self):
+        return self.rect().right
+    @right.setter
+    def right(self, value):
+        rect = self.rect()
+        rect.right = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def top(self):
+        return self.rect().top
+    @top.setter
+    def top(self, value):
+        rect = self.rect()
+        rect.top = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def bottom(self):
+        return self.rect().bottom
+    @bottom.setter
+    def bottom(self, value):
+        rect = self.rect()
+        rect.bottom = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def centerx(self):
+        return self.rect().centerx
+    @centerx.setter
+    def centerx(self, value):
+        rect = self.rect()
+        rect.centerx = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def centery(self):
+        return self.rect().centery
+    @centery.setter
+    def centery(self, value):
+        rect = self.rect()
+        rect.centery = value
+        self.pos = list(rect.topleft)
+
     def rect(self) -> pg.Rect:
         """The actual rect of the sprite. Useful for collision detection and more."""
         return pg.Rect(round(self.pos[0]), round(self.pos[1]), round(self.size[0]), round(self.size[1]))
@@ -79,6 +133,29 @@ class Sprite:
     def remove_spritelist(self, spritelist):
         self.spritelists.remove(spritelist)
 
+
+class Enemy(Sprite):
+    def __init__(self, boundary_left, boundary_right, surface: pg.Surface=None):
+        super().__init__(surface)
+        self.surfaces = []
+        self.surfaces.append(self.surface)
+        self.surfaces.append(pg.transform.flip(self.surface, True, False))
+
+        self.change_x = 3.2
+        self.boundary_left = boundary_left
+        self.boundary_right = boundary_right
+
+    def update(self):
+        if self.right >= self.boundary_right or self.left <= self.boundary_left:
+            self.change_x *= -1
+        self.pos[0] += self.change_x
+        self.pos[1] += self.change_y
+
+        if self.change_x > 0:
+            self.surface = self.surfaces[RIGHT_FACING]
+        elif self.change_x < 0:
+            self.surface = self.surfaces[LEFT_FACING]
+        
 
 class Tile(Sprite):
     def __init__(self, surface: pg.Surface, pos=[0,0], properties={}, animated=False):
@@ -213,14 +290,13 @@ class Player(Sprite):
 
         self.pos[0] += self.change_x
         hit_list = self.get_collisions(walls.get_nearby_tiles_at(self.rect()))
-        rect = self.rect()
         for tile in hit_list:
             if not tile.shape_type in ("slope1", "slope2"):
-                if self.change_x > 0 and rect.right>=tile.rect().left and rect.left<=tile.rect().left:
-                    rect.right = tile.rect().left
+                if self.change_x > 0 and self.right>=tile.left and self.left<=tile.left:
+                    self.right = tile.left
                     self.collisions["right"] = True
-                elif self.change_x < 0 and tile.rect().right>=rect.left and tile.rect().left<=rect.left:
-                    rect.left = tile.rect().right
+                elif self.change_x < 0 and tile.right>=self.left and tile.left<=self.left:
+                    self.left = tile.right
                     self.collisions["left"] = True
             else: 
                 pass
@@ -236,47 +312,42 @@ class Player(Sprite):
                 #     if self.change_x > 0 and rect.right>=tile.rect().left and rect.left<=tile.rect().left:
                 #         rect.right = tile.rect().left
                 #         self.collisions["right"] = True
-        self.pos = list(rect.topleft)
 
         self.pos[1] += self.change_y
         hit_list = self.get_collisions(walls.get_nearby_tiles_at(self.rect()))
-        rect = self.rect()
         for tile in hit_list:
             if not tile.shape_type in ("slope1", "slope2"):
-                if self.change_y > 0 and tile.rect().top<=rect.bottom and tile.rect().bottom>=rect.bottom:
-                    rect.bottom = tile.rect().top
+                if self.change_y > 0 and tile.top<=self.bottom and tile.bottom>=self.bottom:
+                    self.bottom = tile.top
                     self.collisions["bottom"] = True
-                elif self.change_y < 0 and rect.top<=tile.rect().bottom and rect.bottom>=tile.rect().bottom:
-                    rect.top = tile.rect().bottom
+                elif self.change_y < 0 and self.top<=tile.bottom and self.bottom>=tile.bottom:
+                    self.top = tile.bottom
                     self.collisions["top"] = True
             else:
                 if tile.shape_type in ("slope1", "slope2"):
-                    if self.change_y < 0 and rect.top<=tile.rect().bottom and rect.bottom>=tile.rect().bottom:
-                        rect.top = tile.rect().bottom
+                    if self.change_y < 0 and self.top<=tile.bottom and self.bottom>=tile.bottom:
+                        self.top = tile.bottom
                         self.collisions["top"] = True
-        self.pos = list(rect.topleft)
         
         self.on_slope = False
         hit_list = self.get_collisions(walls.get_nearby_tiles_at(self.rect()))
-        rect = self.rect()
         for tile in hit_list:
             if tile.shape_type in ("slope1", "slope2"):
                 if tile.shape_type == "slope1":
-                    pos_height = rect.right - tile.rect().left
+                    pos_height = self.right - tile.left
                 elif tile.shape_type == "slope2":
-                    pos_height = tile.rect().right - rect.left
+                    pos_height = tile.right - self.left
                 
                 # Add constraints
                 pos_height = min(pos_height, tile.rect().height)
                 pos_height = max(pos_height, 0)
 
-                target_y = tile.rect().bottom - pos_height
+                target_y = tile.bottom - pos_height
 
-                if rect.bottom > target_y:
-                    rect.bottom = target_y
+                if self.bottom > target_y:
+                    self.bottom = target_y
                     self.collisions["bottom"] = True
                     self.on_slope = True
-        self.pos = list(rect.topleft)
 
         if self.collisions["bottom"] or self.collisions["top"]:
             self.change_y = 0

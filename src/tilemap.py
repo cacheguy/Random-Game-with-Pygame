@@ -4,7 +4,7 @@ import pytiled_parser.tiled_object
 
 from constants import *
 from utils import load_spritesheet, load_image, relative_to_camera
-from sprites import Tile, CoinTile
+from sprites import Tile, CoinTile, Sprite, Enemy
 from groups import SpriteList
 
 from pathlib import Path
@@ -69,8 +69,21 @@ class Tilemap:
             elif isinstance(layer, pytiled_parser.ObjectLayer):
                 for obj in layer.tiled_objects:
                    if isinstance(obj, pytiled_parser.tiled_object.Tile):
-                       continue
-                       self.layers[layer.name].append()
+                        properties = {**id_to_tile_info[obj.gid]["properties"], **obj.properties}
+                        if properties.get("tile_type") == "green_ninja":
+                            b_left_id = properties["boundary_left"]
+                            b_left_obj = [obj for obj in layer.tiled_objects if obj.id == b_left_id][0]
+                            b_left_x = b_left_obj.coordinates[0] * SCALE
+                            
+                            b_right_id = properties["boundary_right"]
+                            b_right_obj = [obj for obj in layer.tiled_objects if obj.id == b_right_id][0]
+                            b_right_x = b_right_obj.coordinates[0] * SCALE
+
+                            sprite = Enemy(b_left_x, b_right_x, id_to_tile_info[obj.gid]["surface"])
+                            sprite.left, sprite.bottom = list(obj.coordinates)
+                            sprite.left *= SCALE
+                            sprite.bottom *= SCALE
+                            self.layers[layer.name].append(sprite)
                    elif isinstance(obj, pytiled_parser.tiled_object.Point):
                        if "spawn" in obj.properties:
                            self.spawn_point = list(obj.coordinates)

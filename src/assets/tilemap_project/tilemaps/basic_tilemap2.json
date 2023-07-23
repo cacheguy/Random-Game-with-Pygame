@@ -13,6 +13,22 @@
                  "height":24,
                  "id":1,
                  "name":"",
+                 "properties":[
+                        {
+                         "name":"boundary_left",
+                         "type":"object",
+                         "value":3
+                        }, 
+                        {
+                         "name":"boundary_right",
+                         "type":"object",
+                         "value":2
+                        }, 
+                        {
+                         "name":"tile_type",
+                         "type":"string",
+                         "value":"green_ninja"
+                        }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -29,7 +45,7 @@
                  "type":"",
                  "visible":true,
                  "width":0,
-                 "x":440,
+                 "x":460,
                  "y":388
                 }, 
                 {
