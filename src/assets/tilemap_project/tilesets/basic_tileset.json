@@ -79,6 +79,16 @@
          "imagewidth":24,
          "properties":[
                 {
+                 "name":"boundary_left",
+                 "type":"object",
+                 "value":0
+                }, 
+                {
+                 "name":"boundary_right",
+                 "type":"object",
+                 "value":0
+                }, 
+                {
                  "name":"tile_type",
                  "type":"string",
                  "value":"green_ninja"

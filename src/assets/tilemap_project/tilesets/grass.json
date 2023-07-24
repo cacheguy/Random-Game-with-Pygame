@@ -10,8 +10,22 @@
  "tileheight":16,
  "tiles":[
         {
+         "id":1,
+         "properties":[
+                {
+                 "name":"dynamic_type",
+                 "type":"string",
+                 "value":"grass"
+                }]
+        }, 
+        {
          "id":4,
          "properties":[
+                {
+                 "name":"dynamic_type",
+                 "type":"string",
+                 "value":"grass"
+                }, 
                 {
                  "name":"shape_type",
                  "type":"string",
@@ -19,8 +33,22 @@
                 }]
         }, 
         {
+         "id":6,
+         "properties":[
+                {
+                 "name":"dynamic_type",
+                 "type":"string",
+                 "value":"grass"
+                }]
+        }, 
+        {
          "id":14,
          "properties":[
+                {
+                 "name":"dynamic_type",
+                 "type":"string",
+                 "value":"grass"
+                }, 
                 {
                  "name":"shape_type",
                  "type":"string",

@@ -42,7 +42,7 @@ class Engine:
             "g": False
         }
 
-        self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap2.json"))
+        self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap3.json"))
         self.player = Player()
         self.player.centerx, self.player.bottom = self.tilemap.spawn_point
         self.camera_position = [0,0]

@@ -133,7 +133,7 @@ class Sprite:
     def remove_spritelist(self, spritelist):
         self.spritelists.remove(spritelist)
 
-
+# TODO Add interpolation
 class Enemy(Sprite):
     def __init__(self, boundary_left, boundary_right, surface: pg.Surface=None):
         super().__init__(surface)
@@ -141,20 +141,34 @@ class Enemy(Sprite):
         self.surfaces.append(self.surface)
         self.surfaces.append(pg.transform.flip(self.surface, True, False))
 
-        self.change_x = 3.2
+        self.change_x = 3
         self.boundary_left = boundary_left
         self.boundary_right = boundary_right
 
+        self.walking = random.choice([True, False])
+        self.flip_timer = 0
+
     def update(self):
+        self.flip_timer += 1
         if self.right >= self.boundary_right or self.left <= self.boundary_left:
             self.change_x *= -1
-        self.pos[0] += self.change_x
+        if random.random() < 0.01 and self.flip_timer > 60:
+            self.flip_timer = 0
+            self.walking = not self.walking
+            if self.walking:
+                if random.choice([True, False]):
+                    self.change_x *= -1
+        
+        if self.walking:
+            self.pos[0] += self.change_x
         self.pos[1] += self.change_y
 
         if self.change_x > 0:
-            self.surface = self.surfaces[RIGHT_FACING]
+            self.face_direction = RIGHT_FACING
         elif self.change_x < 0:
-            self.surface = self.surfaces[LEFT_FACING]
+            self.face_direction = LEFT_FACING
+
+        self.surface = self.surfaces[self.face_direction]
         
 
 class Tile(Sprite):

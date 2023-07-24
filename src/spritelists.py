@@ -2,9 +2,28 @@ import pygame as pg
 
 from sprites import Sprite
 from constants import *
-from utils import get_offsets_from_rect
+from utils import get_offsets_from_rect, load_spritesheet
 
 from typing import List
+from pathlib import Path
+
+
+DYNAMIC_TEMPLATE = [
+    "top_left", "top", "top_right", "top_left_right", "slope2",
+    "left", "none", "right", "left_right", "slope2_bottom", 
+    "bottom_left", "bottom", "bottom_right", "bottom_left_right", "slope1",
+    "left_top_bottom", "top_bottom", "right_top_bottom", "top_bottom_left_right", "slope1_bottom"
+]
+
+
+loaded_dynamics = False
+def load_dynamic_surfaces():
+    global loaded_dynamics, DYNAMIC_NAME_TO_SURFACES
+    if not loaded_dynamics:
+        loaded_dynamics = True
+        DYNAMIC_NAME_TO_SURFACES = {
+            "grass": load_spritesheet(Path("assets/tiles/grass.png"))
+        }
 
 
 class SpriteList:
@@ -65,6 +84,16 @@ class SpriteList:
             if self.hash_tilemap.get(grid_offsetted):
                 tiles.append(self.hash_tilemap[grid_offsetted])
         return tiles
+    
+    def get_surrounding_directions(self, grid_pos):
+        if self.hash_tilemap is None:
+            raise Exception("Hash tilemap has not been loaded yet")
+        return {
+            "top": not (grid_pos[0], grid_pos[1]-1) in self.hash_tilemap, 
+            "bottom": not (grid_pos[0], grid_pos[1]+1) in self.hash_tilemap, 
+            "left": not (grid_pos[0]-1, grid_pos[1]) in self.hash_tilemap, 
+            "right": not (grid_pos[0]+1, grid_pos[1]) in self.hash_tilemap
+        }
 
     def draw(self, camera_pos=None):
         if not self.hash_tilemap is None:
@@ -79,6 +108,44 @@ class SpriteList:
         else:
             for sprite in self.sprites:
                 sprite.draw()
+
+    def set_dynamic_surfaces(self):
+        if self.hash_tilemap is None:
+            raise Exception("Hash tilemap has not been loaded yet")
+        if not loaded_dynamics:
+            load_dynamic_surfaces()
+        for grid_pos, tile in self.hash_tilemap.items():
+            if not "dynamic_type" in tile.properties:
+                continue
+
+            dynamic_type = None
+            if tile.shape_type == "slope1":
+                dynamic_type = "slope1"
+
+            elif tile.shape_type == "slope2":
+                dynamic_type = "slope2"
+            
+            elif (pos := (grid_pos[0], grid_pos[1]-1)) in self.hash_tilemap:
+                if self.hash_tilemap[pos].shape_type == "slope1":
+                    dynamic_type = "slope1_bottom"
+
+                elif self.hash_tilemap[pos].shape_type == "slope2":
+                    dynamic_type = "slope2_bottom"
+
+            if dynamic_type is None:
+                directions = sorted([key for key, value in self.get_surrounding_directions(grid_pos).items() if value])
+                if len(directions) == 0:
+                    dynamic_type = "none"
+                for dynamic_dir in DYNAMIC_TEMPLATE:
+                    if directions == sorted(dynamic_dir.split("_")):
+                        dynamic_type = dynamic_dir
+
+            if dynamic_type is None:
+                raise Exception("Uknown dynamic type")
+            
+            surfaces = DYNAMIC_NAME_TO_SURFACES[tile.properties["dynamic_type"]]
+            tile.surface = surfaces[DYNAMIC_TEMPLATE.index(dynamic_type)]
+
 
     def update(self):
         for sprite in self.sprites:
