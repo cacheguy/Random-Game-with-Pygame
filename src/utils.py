@@ -1,6 +1,7 @@
 import pygame as pg
 
 from pathlib import Path
+import time
 
 from constants import *
 
@@ -10,8 +11,8 @@ def load_image(filename: Path) -> pg.Surface:
     surface.set_colorkey((0,0,0))
     return surface
 
-def load_spritesheet(filename: Path, count: int = -1):
-    tile_size = 16
+def load_spritesheet(filename: Path, size=16, count: int = -1):
+    tile_size = size
     spritesheet = pg.image.load(filename).convert()
     spritesheet.set_colorkey((0,0,0))
 
@@ -48,3 +49,15 @@ def get_offsets_from_rect(rect: pg.Rect, tile_size: int):
         for y in range(grid_top, grid_bottom):
             offsets.append((x,y))
     return offsets
+
+def pallete_swap(surface: pg.Surface, old_color, new_color):
+    new_surface = pg.Surface(surface.get_size())
+    new_surface.fill(new_color)
+
+    surface_copy = surface.copy()
+    old_colorkey = surface_copy.get_colorkey()
+    surface_copy.set_colorkey(old_color)
+    new_surface.blit(surface_copy, (0,0))
+    new_surface.set_colorkey(old_colorkey)
+
+    return new_surface

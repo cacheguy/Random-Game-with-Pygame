@@ -12,7 +12,7 @@ TARGET_FPS = 60
 TARGET_DT = 1/TARGET_FPS
 FIXED_TIMESTEP_SETTINGS = {
     "enable": True,
-    "interpolate": True,
+    "interpolate": True,  # TODO Make this work
     "snap_dt": True,
     "busy_loop": False
 }

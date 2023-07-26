@@ -42,7 +42,7 @@ class Engine:
             "g": False
         }
 
-        self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap3.json"))
+        self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap2.json"))
         self.player = Player()
         self.player.centerx, self.player.bottom = self.tilemap.spawn_point
         self.camera_position = [0,0]
@@ -96,13 +96,14 @@ class Engine:
         # rect = self.player.draw_rect
         # rect.topleft = relative_to_camera(rect.topleft, self.camera_position)
         # pg.draw.rect(self.screen, (255,0,0), rect, 2)
-        offsets = get_offsets_from_rect(self.player.rect(), 16*SCALE)
 
-        for offset in offsets:
-            pg.draw.rect(self.screen, (0,255,0), pg.Rect(relative_to_camera([self.player.pos[0]//64*64+offset[0]*64, self.player.pos[1]//64*64+offset[1]*64], self.camera_position), [64,64]), 2)
-        rect = self.player.rect()
-        rect.topleft = relative_to_camera(rect.topleft, self.camera_position)
-        pg.draw.rect(self.screen, (255,0,0), rect, 2)
+        # offsets = get_offsets_from_rect(self.player.rect(), 16*SCALE)
+
+        # for offset in offsets:
+        #     pg.draw.rect(self.screen, (0,255,0), pg.Rect(relative_to_camera([self.player.pos[0]//64*64+offset[0]*64, self.player.pos[1]//64*64+offset[1]*64], self.camera_position), [64,64]), 2)
+        # rect = self.player.rect()
+        # rect.topleft = relative_to_camera(rect.topleft, self.camera_position)
+        # pg.draw.rect(self.screen, (255,0,0), rect, 2)
 
         if self.enable_debug_text:
             self.reset_debug_text()
@@ -116,6 +117,7 @@ class Engine:
             self.debug_text("Collisions", self.player.collisions)
             self.debug_text("On Slope", self.player.on_slope)
             self.debug_text("Jump Count", self.player.jump_count)
+            self.debug_text("Current Anim", self.player.anim_state)
 
     def debug_text(self, item, value, round_floats=True):
         if isinstance(value, float) and round_floats:
@@ -178,6 +180,8 @@ class Engine:
 
     def update(self):
         self.handle_events()
+        if self.player.pos[1] > 3200:
+            self.reset()
         self.tilemap.update()
         self.player.update()
 

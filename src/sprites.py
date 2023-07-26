@@ -2,6 +2,7 @@ import pygame as pg
 
 from constants import *
 from utils import *
+from animations import AnimationStates
 
 from pathlib import Path
 import math
@@ -150,13 +151,15 @@ class Enemy(Sprite):
 
     def update(self):
         self.flip_timer += 1
+        switched = False
         if self.right >= self.boundary_right or self.left <= self.boundary_left:
             self.change_x *= -1
+            switched = True  # Make sure enemy doesn't flip direction twice
         if random.random() < 0.01 and self.flip_timer > 60:
             self.flip_timer = 0
             self.walking = not self.walking
             if self.walking:
-                if random.choice([True, False]):
+                if random.choice([True, False]) and not switched:
                     self.change_x *= -1
         
         if self.walking:
@@ -211,10 +214,34 @@ MAX_WALK_SPEED = 8.25
 class Player(Sprite):
     def __init__(self):
         super().__init__()
-        self.surface = load_image(Path("assets/player/idle1.png"))
-        self.surfaces = []
-        self.surfaces.append(self.surface)
-        self.surfaces.append(pg.transform.flip(self.surface, True, False))
+        s = load_spritesheet(Path("assets/player/player_idle.png"), size=24, count=4)
+        idle_surfaces = [s[0], s[0], s[1], s[2], s[3], s[3], s[2], s[1]]
+        idle_surfaces_dict = {
+            "default": idle_surfaces, 
+            "blink": self.blinkify_surfaces(idle_surfaces)
+        }
+        self.idle_anim = AnimationStates(frames_dict=idle_surfaces_dict, speed=0.15, use_RL=True)
+
+        walk_surfaces = load_spritesheet(Path("assets/player/player_walk.png"), size=24, count=10)
+        walk_surfaces_dict = {
+            "default": walk_surfaces, 
+            "blink": self.blinkify_surfaces(walk_surfaces)
+        }
+        self.walk_anim = AnimationStates(frames_dict=walk_surfaces_dict, speed=0.27, use_RL=True)
+
+        # fall_surface = load_image(Path("assets/player/player_fall.png"))
+        # flipped_fall_surface = pg.transform.flip(fall_surface, True, False)
+        # self.fall_surfaces = {
+        #     "default": [fall_surface, flipped_fall_surface],
+        #     "blink": self.blinkify_surfaces([fall_surface, flipped_fall_surface])
+        # }
+
+        fall_surfaces = load_spritesheet(Path("assets/player/player_fall.png"), size=24, count=3)
+        fall_surfaces_dict = {
+            "default": fall_surfaces,
+            "blink": self.blinkify_surfaces(fall_surfaces)
+        }
+        self.fall_anim = AnimationStates(frames_dict=fall_surfaces_dict, speed=0.35, use_RL=True)
 
         self.pos = [0,0]
         self.hitbox_rect = load_image(Path("assets/player/hitbox.png")).get_bounding_rect()
@@ -236,6 +263,9 @@ class Player(Sprite):
         self.sounds["coin"] = pg.mixer.Sound(Path("assets/sounds/coin.wav"))
         self.god_mode = False
         self.on_slope = False
+        self.blink = 0
+        self.walking = False
+        self.anim_state = "idle"
     
     def move_on_god_mode(self):
         speed = 18
@@ -270,9 +300,12 @@ class Player(Sprite):
 
         if self.engine.keys["right"] and not self.engine.keys["left"]:
             self.change_x += ACCELERATION
+            self.walking = True
         elif self.engine.keys["left"] and not self.engine.keys["right"]:
             self.change_x -= ACCELERATION
+            self.walking = True
         else:
+            self.walking = False
             if self.change_x > 0:
                 self.change_x -= DEACCELERATION
                 if self.change_x < 0:
@@ -294,6 +327,10 @@ class Player(Sprite):
                 hit_list.append(tile)
         return hit_list
 
+    @staticmethod
+    def blinkify_surfaces(surfaces):
+        return [pallete_swap(surface, (21,12,69,255), (232,187,121,255)) for surface in surfaces]
+    
     def apply_collisions(self):
         if self.on_slope and not self.change_y < 0:
             self.change_y += 10
@@ -373,9 +410,7 @@ class Player(Sprite):
         hit_list = self.get_collisions(self.engine.tilemap.layers["Objects"]) 
         for obj in hit_list:
             if obj.tile_type == "spring":
-                rect = self.rect()
-                rect.bottom = obj.rect().top
-                self.pos = list(rect.topleft)
+                self.bottom = obj.top
                 self.change_y = -32
                 self.jump_count = MAX_JUMP_COUNT
                 self.sounds["spring"].play()
@@ -390,7 +425,55 @@ class Player(Sprite):
         elif self.change_x < 0:
             self.face_direction = LEFT_FACING
 
-        self.surface = self.surfaces[self.face_direction]
+        self.blink += 1
+        if self.blink > 8:
+            self.blink = random.randint(-400, -250)
+
+        if self.blink > 0:
+            state = "blink"
+        else:
+            state = "default"
+
+        if self.god_mode:
+            self.anim_state = "god"
+            self.surface = self.fall_anim.frames_dict[self.face_direction][state][-1]
+
+        elif not self.can_jump:
+            if not self.anim_state in ("in_fall", "fall"):
+                self.anim_state = "in_fall"
+                self.fall_anim.reset()
+
+            if self.anim_state == "in_fall":
+                self.surface = self.fall_anim.update(state=state, direction=self.face_direction)
+                if self.fall_anim.had_automatically_resetted:
+                    self.anim_state = "fall"
+
+            elif self.anim_state == "fall":
+                self.surface = self.fall_anim.frames_dict[self.face_direction][state][-1]
+
+        elif self.anim_state in ("in_fall", "fall", "out_fall"):
+            if self.anim_state in ("in_fall", "fall"):
+                self.anim_state = "out_fall"
+                self.fall_anim.reset()
+            self.surface = self.fall_anim.update(state=state, direction=self.face_direction, 
+                                                 reverse=True, speed_alpha=3)
+            if self.fall_anim.had_automatically_resetted:
+                self.anim_state = "exit_fall"
+
+
+        elif self.walking or not self.change_x == 0:
+            if not self.anim_state == "walk":
+                self.walk_anim.reset()
+            self.anim_state = "walk"
+            self.surface = self.walk_anim.update(state=state, 
+                                                 direction=self.face_direction, 
+                                                 speed_alpha=abs(self.change_x/MAX_WALK_SPEED))
+
+        else:
+            if not self.anim_state == "idle":
+                self.idle_anim.reset()
+            self.anim_state = "idle"
+            self.surface = self.idle_anim.update(state=state, direction=self.face_direction)
 
     def draw(self):
         alpha = self.engine.accumulator/TARGET_DT
