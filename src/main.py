@@ -20,6 +20,7 @@ class Engine:
         Sprite.set_engine(self)
         self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), vsync=False)
         pg.display.set_caption(TITLE)
+        pg.display.set_icon(pg.transform.scale(pg.image.load(Path("assets/icon.png")).convert_alpha(), (32,32)))
         self.clock = pg.time.Clock()
         self.font = pg.font.SysFont("calibri", size=32)
 
@@ -42,7 +43,7 @@ class Engine:
             "g": False
         }
 
-        self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap2.json"))
+        self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap3.json"))
         self.player = Player()
         self.player.centerx, self.player.bottom = self.tilemap.spawn_point
         self.camera_position = [0,0]

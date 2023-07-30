@@ -128,6 +128,10 @@ class Sprite:
         if self.on_screen(rect):
             self.screen.blit(surface, pos)
 
+    def kill(self):
+        for spritelist in self.spritelists.copy():
+            spritelist.remove(self)
+
     def add_spritelist(self, spritelist):
         self.spritelists.append(spritelist)
 
@@ -138,9 +142,15 @@ class Sprite:
 class Enemy(Sprite):
     def __init__(self, boundary_left, boundary_right, surface: pg.Surface=None):
         super().__init__(surface)
-        self.surfaces = []
-        self.surfaces.append(self.surface)
-        self.surfaces.append(pg.transform.flip(self.surface, True, False))
+        s = load_spritesheet(Path("assets/enemy/enemy_idle.png"), size=24, count=4)
+        idle_surfaces = [s[0], s[0], s[1], s[2], s[3], s[3], s[2], s[1]]
+        self.idle_anim = AnimationStates(frames_dict={"default": idle_surfaces}, speed=0.135, use_RL=True)
+
+        walk_surfaces = load_spritesheet(Path("assets/enemy/enemy_walk.png"), size=24, count=10)
+        self.walk_anim = AnimationStates(frames_dict={"default": walk_surfaces}, speed=0.21, use_RL=True)
+
+        fall_surfaces = load_spritesheet(Path("assets/enemy/enemy_fall.png"), size=24, count=3)
+        self.fall_anim = AnimationStates(frames_dict={"default": fall_surfaces}, speed=0.35, use_RL=True)
 
         self.change_x = 3
         self.boundary_left = boundary_left
@@ -150,16 +160,17 @@ class Enemy(Sprite):
         self.flip_timer = 0
 
     def update(self):
-        self.flip_timer += 1
+        self.flip_timer -= 1
         switched = False
         if self.right >= self.boundary_right or self.left <= self.boundary_left:
             self.change_x *= -1
             switched = True  # Make sure enemy doesn't flip direction twice
-        if random.random() < 0.01 and self.flip_timer > 60:
+        if self.flip_timer <= 0 and not switched:
             self.flip_timer = 0
             self.walking = not self.walking
+            self.flip_timer = random.randint(50, 300)
             if self.walking:
-                if random.choice([True, False]) and not switched:
+                if random.choice([True, False]):
                     self.change_x *= -1
         
         if self.walking:
@@ -171,7 +182,10 @@ class Enemy(Sprite):
         elif self.change_x < 0:
             self.face_direction = LEFT_FACING
 
-        self.surface = self.surfaces[self.face_direction]
+        if self.walking:
+            self.surface = self.walk_anim.update(direction=self.face_direction)
+        else:
+            self.surface = self.idle_anim.update(direction=self.face_direction)
         
 
 class Tile(Sprite):
@@ -185,10 +199,6 @@ class Tile(Sprite):
     def get_surrounding_tiles(self):
         pass
 
-    def kill(self):
-        for spritelist in self.spritelists.copy():
-            spritelist.remove(self)
-
 
 class MovingTile(Sprite): pass
 
@@ -196,12 +206,25 @@ class MovingTile(Sprite): pass
 class CoinTile(Tile):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.surface = load_image(Path("assets/tiles/gold_coin/gold_coin.png"))
+        surfaces = load_spritesheet(Path("assets/tiles/gold_coin/gold_coin_collect.png"))
+        self.collect_anim = AnimationStates({"default": surfaces}, speed=0.1)
         self.original_y = self.pos[1]
         self.frames_passed = 0
+        self.collected = False
+
+    def collect(self):
+        self.collected = True
 
     def update(self):
-        self.frames_passed += 1
-        self.pos[1] = self.original_y + (math.sin(self.frames_passed/21) * 7)
+        if self.collected:
+            self.surface = self.collect_anim.update()
+            if self.collect_anim.finished:
+                self.kill()
+            self.pos[1] = self.original_y
+        else:
+            self.frames_passed += 1
+            self.pos[1] = self.original_y + (math.sin(self.frames_passed/21) * 7)
 
 
 MAX_JUMP_COUNT = 10
@@ -227,14 +250,7 @@ class Player(Sprite):
             "default": walk_surfaces, 
             "blink": self.blinkify_surfaces(walk_surfaces)
         }
-        self.walk_anim = AnimationStates(frames_dict=walk_surfaces_dict, speed=0.27, use_RL=True)
-
-        # fall_surface = load_image(Path("assets/player/player_fall.png"))
-        # flipped_fall_surface = pg.transform.flip(fall_surface, True, False)
-        # self.fall_surfaces = {
-        #     "default": [fall_surface, flipped_fall_surface],
-        #     "blink": self.blinkify_surfaces([fall_surface, flipped_fall_surface])
-        # }
+        self.walk_anim = AnimationStates(frames_dict=walk_surfaces_dict, speed=0.29, use_RL=True)
 
         fall_surfaces = load_spritesheet(Path("assets/player/player_fall.png"), size=24, count=3)
         fall_surfaces_dict = {
@@ -415,8 +431,9 @@ class Player(Sprite):
                 self.jump_count = MAX_JUMP_COUNT
                 self.sounds["spring"].play()
             elif obj.tile_type == "coin":
-                obj.kill()
-                self.sounds["coin"].play()
+                if not obj.collected:
+                    obj.collect()
+                    self.sounds["coin"].play()
 
         self.apply_collisions()
 
@@ -445,7 +462,7 @@ class Player(Sprite):
 
             if self.anim_state == "in_fall":
                 self.surface = self.fall_anim.update(state=state, direction=self.face_direction)
-                if self.fall_anim.had_automatically_resetted:
+                if self.fall_anim.finished:
                     self.anim_state = "fall"
 
             elif self.anim_state == "fall":
@@ -457,7 +474,7 @@ class Player(Sprite):
                 self.fall_anim.reset()
             self.surface = self.fall_anim.update(state=state, direction=self.face_direction, 
                                                  reverse=True, speed_alpha=3)
-            if self.fall_anim.had_automatically_resetted:
+            if self.fall_anim.finished:
                 self.anim_state = "exit_fall"
 
 

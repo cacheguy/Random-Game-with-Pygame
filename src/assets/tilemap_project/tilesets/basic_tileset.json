@@ -62,7 +62,7 @@
         }, 
         {
          "id":5,
-         "image":"..\/..\/tiles\/gold_coin.png",
+         "image":"..\/..\/tiles\/gold_coin\/gold_coin.png",
          "imageheight":16,
          "imagewidth":16,
          "properties":[

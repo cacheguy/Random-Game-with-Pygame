@@ -38,7 +38,7 @@ class AnimationStates:
         self.use_RL = use_RL
         self.speed = speed
         self._frame_num = 0
-        self.had_automatically_resetted = False  # Can be used to check if the animation had already run one loop.
+        self.finished = False  # Can be used to check if the animation had already run one loop.
 
     @property
     def frame_num(self):
@@ -49,9 +49,9 @@ class AnimationStates:
         self._frame_num = value
         if self.frame_num >= self.frame_list_len:
             self.reset()
-            self.had_automatically_resetted = True
+            self.finished = True
         else:
-            self.had_automatically_resetted = False
+            self.finished = False
 
     def reset(self, reverse=False):
         self._frame_num = 0
