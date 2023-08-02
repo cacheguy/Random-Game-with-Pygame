@@ -40,6 +40,7 @@ class Engine:
             "left": False,
             "up": False,
             "down": False,
+            "e": False,
             "g": False
         }
 
@@ -60,6 +61,7 @@ class Engine:
                     case pg.K_s | pg.K_DOWN: self.keys["down"] = True
                     case pg.K_a | pg.K_LEFT: self.keys["left"] = True
                     case pg.K_d | pg.K_RIGHT: self.keys["right"] = True
+                    case pg.K_e: self.keys["e"] = True
                     case pg.K_f: self.enable_debug_text = not self.enable_debug_text
                     case pg.K_g: self.keys["g"] = not self.keys["g"]
                     case pg.K_r: self.reset()
@@ -69,6 +71,7 @@ class Engine:
                     case pg.K_s | pg.K_DOWN: self.keys["down"] = False
                     case pg.K_a | pg.K_LEFT: self.keys["left"] = False
                     case pg.K_d | pg.K_RIGHT: self.keys["right"] = False
+                    case pg.K_e: self.keys["e"] = False
 
     def quit(self):
         self.running = False
@@ -82,8 +85,18 @@ class Engine:
 
     def draw(self):
         self.screen.fill((119, 196, 236))
+
+        # mouse_pos = pg.mouse.get_pos()
+        # mouse_pos = mouse_pos[0] + self.camera_position[0], mouse_pos[1] + self.camera_position[1]
+        # grid_mouse_pos = mouse_pos[0]//64, mouse_pos[1]//64
+        # if self.tilemap.layers["Walls"].hash_tilemap is not None:
+        #     if tile := self.tilemap.layers["Walls"].hash_tilemap.get(grid_mouse_pos):
+        #         mouse_collide = tile.point_in_tile(mouse_pos)
+        #         if mouse_collide:
+        #             tile.opacity = 255*0.6
         self.tilemap.draw(self.camera_position)
         self.player.draw()
+
         # grid_pos = self.player.pos[0]//64*64, self.player.pos[1]//64*64
         # grid_pos = relative_to_camera(grid_pos, self.camera_position)
         # pg.draw.rect(self.screen, (0,0,255), pg.Rect(grid_pos, (64,64)), 2)
@@ -118,7 +131,7 @@ class Engine:
             self.debug_text("Collisions", self.player.collisions)
             self.debug_text("On Slope", self.player.on_slope)
             self.debug_text("Jump Count", self.player.jump_count)
-            self.debug_text("Current Anim", self.player.anim_state)
+            self.debug_text("Shurikens", self.player.shurikens)
 
     def debug_text(self, item, value, round_floats=True):
         if isinstance(value, float) and round_floats:

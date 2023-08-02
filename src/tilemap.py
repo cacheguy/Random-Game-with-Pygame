@@ -4,7 +4,7 @@ import pytiled_parser.tiled_object
 
 from constants import *
 from utils import load_spritesheet, load_image, relative_to_camera
-from sprites import Tile, CoinTile, Sprite, Enemy
+from sprites import Tile, CoinTile, Sprite, Enemy, RopeTile
 from spritelists import SpriteList
 
 from pathlib import Path
@@ -15,6 +15,9 @@ TYPES_TO_TILES = {
     "coin": {
         "class": CoinTile
     },
+    "rope": {
+        "class": RopeTile
+    }
 }
 
 
@@ -28,7 +31,7 @@ class Tilemap:
                 for tileid, tile in tileset.tiles.items():
                     id_to_tile_info[tileid+firstgid] = {
                         "surface": load_image(tile.image),  # TODO: Add caching
-                        "properties": tile.properties
+                        "properties": tile.properties,
                     }
             else:
                 surfaces = load_spritesheet(tileset.image)
@@ -55,9 +58,10 @@ class Tilemap:
                             tile_type = properties.get("tile_type")
                             if TYPES_TO_TILES.get(tile_type):
                                 custom_class = TYPES_TO_TILES.get(tile_type)["class"]
-
+                        pos = [x*tile_size*SCALE, 
+                               y*tile_size*SCALE-(tile_info["surface"].get_height()-tile_size*SCALE)]
                         tile_object = custom_class(surface=tile_info["surface"], 
-                                                   pos=[x*tile_size*SCALE, y*tile_size*SCALE], 
+                                                   pos=pos, 
                                                    properties=properties)
 
                         if properties.get("shape_type") == "slope1":

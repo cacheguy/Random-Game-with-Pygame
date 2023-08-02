@@ -11,6 +11,14 @@ def load_image(filename: Path) -> pg.Surface:
     surface.set_colorkey((0,0,0))
     return surface
 
+def rotate_surface(surface, angle, pivot, offset):
+    raise NotImplementedError
+    rotated_surface = pg.transform.rotate(surface, -angle)  # Rotate the image.
+    rotated_offset = pg.Vector2(*offset).rotate(angle)  # Rotate the offset vector.
+    # Add the offset vector to the center/pivot point to shift the rect.
+    rect = rotated_surface.get_rect(center=pivot+rotated_offset)
+    return rotated_surface, rect  # Return the rotated image and shifted rect.
+
 def load_spritesheet(filename: Path, size=16, count: int = -1):
     tile_size = size
     spritesheet = pg.image.load(filename).convert()

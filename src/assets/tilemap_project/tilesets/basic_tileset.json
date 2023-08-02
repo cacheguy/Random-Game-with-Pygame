@@ -8,9 +8,9 @@
  "margin":0,
  "name":"basic_tileset",
  "spacing":0,
- "tilecount":7,
+ "tilecount":8,
  "tiledversion":"1.10.1",
- "tileheight":24,
+ "tileheight":64,
  "tiles":[
         {
          "id":0,
@@ -92,6 +92,18 @@
                  "name":"tile_type",
                  "type":"string",
                  "value":"green_ninja"
+                }]
+        }, 
+        {
+         "id":7,
+         "image":"..\/..\/tiles\/rope.png",
+         "imageheight":64,
+         "imagewidth":16,
+         "properties":[
+                {
+                 "name":"tile_type",
+                 "type":"string",
+                 "value":"rope"
                 }]
         }],
  "tilewidth":24,

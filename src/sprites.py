@@ -3,140 +3,12 @@ import pygame as pg
 from constants import *
 from utils import *
 from animations import AnimationStates
+from spritelists import Sprite, SpriteList
 
 from pathlib import Path
 import math
 import random
 import time
-
-
-class Sprite:
-    engine = None
-    def __init__(self, surface: pg.Surface=None):
-        self.screen = self.engine.screen
-        self.draw_rect_offset = (0,0)
-        self.shape_type = None
-
-        self.change_x = 0
-        self.change_y = 0
-
-        self.opacity = 255
-        self.angle = 0
-        self.scale = 1
-
-        self.pos = [0,0]  # Topleft
-
-        if surface is not None:
-            self.surface = surface
-            self.size = list(self.surface.get_rect().size)
-        else:
-            self.surface = None
-            self.size = [0,0]
-
-        self.spritelists = []
-
-    @classmethod
-    def set_engine(cls, engine):
-        cls.engine = engine
-
-    @property
-    def left(self):
-        return self.rect().left
-    @left.setter
-    def left(self, value):
-        rect = self.rect()
-        rect.left = value
-        self.pos = list(rect.topleft)
-
-    @property
-    def right(self):
-        return self.rect().right
-    @right.setter
-    def right(self, value):
-        rect = self.rect()
-        rect.right = value
-        self.pos = list(rect.topleft)
-
-    @property
-    def top(self):
-        return self.rect().top
-    @top.setter
-    def top(self, value):
-        rect = self.rect()
-        rect.top = value
-        self.pos = list(rect.topleft)
-
-    @property
-    def bottom(self):
-        return self.rect().bottom
-    @bottom.setter
-    def bottom(self, value):
-        rect = self.rect()
-        rect.bottom = value
-        self.pos = list(rect.topleft)
-
-    @property
-    def centerx(self):
-        return self.rect().centerx
-    @centerx.setter
-    def centerx(self, value):
-        rect = self.rect()
-        rect.centerx = value
-        self.pos = list(rect.topleft)
-
-    @property
-    def centery(self):
-        return self.rect().centery
-    @centery.setter
-    def centery(self, value):
-        rect = self.rect()
-        rect.centery = value
-        self.pos = list(rect.topleft)
-
-    def rect(self) -> pg.Rect:
-        """The actual rect of the sprite. Useful for collision detection and more."""
-        return pg.Rect(round(self.pos[0]), round(self.pos[1]), round(self.size[0]), round(self.size[1]))
-    
-    def draw_rect(self) -> pg.Rect:
-        """The rect of the surface that will be drawn."""
-        rect = self.surface.get_rect()
-        rect.topleft = [round(self.pos[0]), round(self.pos[1])]
-        rect.x += self.draw_rect_offset[0]
-        rect.y += self.draw_rect_offset[1]
-        return rect
-
-    def on_screen(self, rect):
-        return not (rect.right< 0 or rect.left > SCREEN_WIDTH or rect.bottom < 0 or rect.top > SCREEN_HEIGHT)
-            
-    def update(self): 
-        pass
-
-    def draw(self):
-        draw_rect_to_cam = self.draw_rect()
-        draw_rect_to_cam.topleft = relative_to_camera(draw_rect_to_cam.topleft, self.engine.camera_position)
-
-        if not self.angle == 0:
-            surface = pg.transform.rotate(self.surface, self.angle)
-            rect = surface.get_rect()
-            rect.center = draw_rect_to_cam.center
-            pos = rect.topleft
-        else:
-            surface = self.surface
-            rect = draw_rect_to_cam
-            pos = draw_rect_to_cam.topleft
-
-        if self.on_screen(rect):
-            self.screen.blit(surface, pos)
-
-    def kill(self):
-        for spritelist in self.spritelists.copy():
-            spritelist.remove(self)
-
-    def add_spritelist(self, spritelist):
-        self.spritelists.append(spritelist)
-
-    def remove_spritelist(self, spritelist):
-        self.spritelists.remove(spritelist)
 
 # TODO Add interpolation
 class Enemy(Sprite):
@@ -160,6 +32,7 @@ class Enemy(Sprite):
         self.flip_timer = 0
 
     def update(self):
+        super().update()
         self.flip_timer -= 1
         switched = False
         if self.right >= self.boundary_right or self.left <= self.boundary_left:
@@ -196,8 +69,27 @@ class Tile(Sprite):
         self.animated = animated
         self.pos = pos
 
-    def get_surrounding_tiles(self):
-        pass
+    def point_in_tile(self, point):
+        """This method can calculate collisions with shape types like slopes."""
+        if self.rect().collidepoint(*point):
+            rel_to_tile = point[0] - self.left, point[1] - self.top
+            if self.shape_type == "slope1":
+                if rel_to_tile[1] > self.size[0]-rel_to_tile[0]:
+                    return True
+                else:
+                    return False
+            elif self.shape_type == "slope2":
+                if rel_to_tile[1] >= rel_to_tile[0]:
+                    return True
+                else:
+                    return False
+            else:
+                return True
+        return False
+
+    def update(self):
+        super().update()
+        self.opacity = 255
 
 
 class MovingTile(Sprite): pass
@@ -217,6 +109,7 @@ class CoinTile(Tile):
         self.collected = True
 
     def update(self):
+        super().update()
         if self.collected:
             self.surface = self.collect_anim.update()
             if self.collect_anim.finished:
@@ -226,6 +119,19 @@ class CoinTile(Tile):
             self.frames_passed += 1
             self.pos[1] = self.original_y + (math.sin(self.frames_passed/21) * 7)
 
+
+class RopeTile(Tile):
+    """Doesn't do much now... will work on later"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.surface = load_image(Path("assets/tiles/rope.png"))
+        self.change_angle = 2
+
+    def update(self):
+        super().update()
+        self.angle += self.change_angle
+        if self.angle >= 35 or self.angle <= -35:
+            self.change_angle *= -1
 
 MAX_JUMP_COUNT = 10
 JUMP_SPEED = 14
@@ -272,16 +178,19 @@ class Player(Sprite):
         self.jump_count = 0
         self.gravity = 1.1
 
-        self.old_pos = list(self.pos)
         self.sounds = {}
         self.sounds["jump"] = pg.mixer.Sound(Path("assets/sounds/jump.wav"))
         self.sounds["spring"] = pg.mixer.Sound(Path("assets/sounds/spring.wav"))
         self.sounds["coin"] = pg.mixer.Sound(Path("assets/sounds/coin.wav"))
+        self.sounds["shuriken_throw"] = pg.mixer.Sound(Path("assets/sounds/shuriken_throw.wav"))
         self.god_mode = False
         self.on_slope = False
         self.blink = 0
         self.walking = False
         self.anim_state = "idle"
+        self.can_shoot_shuriken = 0
+
+        self.shurikens = SpriteList()
     
     def move_on_god_mode(self):
         speed = 18
@@ -347,7 +256,7 @@ class Player(Sprite):
     def blinkify_surfaces(surfaces):
         return [pallete_swap(surface, (21,12,69,255), (232,187,121,255)) for surface in surfaces]
     
-    def apply_collisions(self):
+    def do_collisions(self):
         if self.on_slope and not self.change_y < 0:
             self.change_y += 10
         if not self.god_mode: self.change_y += self.gravity
@@ -420,9 +329,21 @@ class Player(Sprite):
             self.change_y = 0
 
     def update(self):
-        self.old_pos = list(self.pos)
+        super().update()
         self.god_mode = self.engine.keys["g"]
         self.move_on_inputs()
+
+        if self.can_shoot_shuriken > 0:
+            self.can_shoot_shuriken -= 1
+        if not self.engine.keys["e"]:
+            self.can_shoot_shuriken = True
+
+        if self.engine.keys["e"] and self.can_shoot_shuriken == 0:
+            shuriken = Shuriken((self.centerx+10, self.centery-24), self.face_direction)
+            self.shurikens.append(shuriken)
+            self.can_shoot_shuriken = 60
+            self.sounds["shuriken_throw"].play()
+
         hit_list = self.get_collisions(self.engine.tilemap.layers["Objects"]) 
         for obj in hit_list:
             if obj.tile_type == "spring":
@@ -435,8 +356,11 @@ class Player(Sprite):
                     obj.collect()
                     self.sounds["coin"].play()
 
-        self.apply_collisions()
+        self.do_collisions()
+        self.shurikens.update()
+        self.update_animation()
 
+    def update_animation(self):
         if self.change_x > 0:
             self.face_direction = RIGHT_FACING
         elif self.change_x < 0:
@@ -493,11 +417,57 @@ class Player(Sprite):
             self.surface = self.idle_anim.update(state=state, direction=self.face_direction)
 
     def draw(self):
-        alpha = self.engine.accumulator/TARGET_DT
-        old = self.pos
-        self.pos = [
-            lerp(self.old_pos[0], self.pos[0], alpha),
-            lerp(self.old_pos[1], self.pos[1], alpha)
-        ]
+        self.shurikens.draw()
         super().draw()
-        self.pos = old
+
+
+class Shuriken(Sprite):
+    speed = 14
+    def __init__(self, pos, direction):
+        surface = load_image(Path("assets/projectiles/shuriken.png"))
+        if direction == RIGHT_FACING: surface = pg.transform.flip(surface, True, False)
+        super().__init__(surface)
+        self.pos = list(pos)
+        if direction == RIGHT_FACING:
+            self.change_x = 22
+            
+        elif direction == LEFT_FACING:
+            self.change_x = -22
+        else:
+            raise ValueError(f"Invalid direction: {direction}")
+        self.distance_traveled = 0
+        self.angle = random.randint(0, 359)
+        self.time_on_wall = None
+        
+    def update(self):
+        super().update()
+        walls = self.engine.tilemap.layers["Walls"]
+        if not self.time_on_wall is None:
+            self.time_on_wall -= 1
+            if self.time_on_wall < 0:
+                if self.opacity - 10 < 0: self.kill()
+                else: self.opacity -= 10
+        else:
+
+            if self.change_x < 0:
+                self.change_x += 1
+                if self.change_x > -self.speed:
+                    self.change_x = -self.speed
+            elif self.change_x > 0:
+                self.change_x -= 1
+                if self.change_x < self.speed:
+                    self.change_x = self.speed
+            if self.change_x > 0: points = ((self.right, self.bottom), (self.right, self.top))
+            elif self.change_x < 0: points = ((self.left, self.bottom), (self.left, self.top))
+            else: points = ()
+            for point in points:
+                if tile := walls.hash_tilemap.get(walls.hash_point(point)):
+                    if tile.point_in_tile(point):
+                        self.change_x = 0
+                        self.time_on_wall = 280
+        self.angle += self.change_x*-0.7
+        self.pos[0] += self.change_x
+        self.pos[1] += self.change_y
+        self.distance_traveled += abs(self.change_x)
+        if self.distance_traveled > 3200:
+            self.kill()

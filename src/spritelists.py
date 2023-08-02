@@ -1,11 +1,154 @@
 import pygame as pg
 
-from sprites import Sprite
 from constants import *
-from utils import get_offsets_from_rect, load_spritesheet
+from utils import get_offsets_from_rect, load_spritesheet, relative_to_camera, lerp
 
 from typing import List
 from pathlib import Path
+
+class Sprite:
+    engine = None
+    def __init__(self, surface: pg.Surface=None, interpolate=False):
+        self.screen = self.engine.screen
+        self.draw_rect_offset = (0,0)
+        self.shape_type = None
+
+        self.change_x = 0
+        self.change_y = 0
+
+        self.opacity = 255
+        self.angle = 0
+        self.scale = 1
+
+        self.pos = [0,0]  # Topleft
+        self.old_pos = list(self.pos)
+
+        if surface is not None:
+            self.surface = surface
+            self.size = list(self.surface.get_rect().size)
+        else:
+            self.surface = None
+            self.size = [0,0]
+
+        self.spritelists = []
+
+    @classmethod
+    def set_engine(cls, engine):
+        cls.engine = engine
+
+    @property
+    def left(self):
+        return self.rect().left
+    @left.setter
+    def left(self, value):
+        rect = self.rect()
+        rect.left = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def right(self):
+        return self.rect().right
+    @right.setter
+    def right(self, value):
+        rect = self.rect()
+        rect.right = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def top(self):
+        return self.rect().top
+    @top.setter
+    def top(self, value):
+        rect = self.rect()
+        rect.top = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def bottom(self):
+        return self.rect().bottom
+    @bottom.setter
+    def bottom(self, value):
+        rect = self.rect()
+        rect.bottom = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def centerx(self):
+        return self.rect().centerx
+    @centerx.setter
+    def centerx(self, value):
+        rect = self.rect()
+        rect.centerx = value
+        self.pos = list(rect.topleft)
+
+    @property
+    def centery(self):
+        return self.rect().centery
+    @centery.setter
+    def centery(self, value):
+        rect = self.rect()
+        rect.centery = value
+        self.pos = list(rect.topleft)
+
+    def rect(self) -> pg.Rect:
+        """The actual rect of the sprite. Useful for collision detection and more."""
+        return pg.Rect(round(self.pos[0]), round(self.pos[1]), round(self.size[0]), round(self.size[1]))
+    
+    def draw_rect(self) -> pg.Rect:
+        """The rect of the surface that will be drawn."""
+        rect = self.surface.get_rect()
+        rect.topleft = [round(self.pos[0]), round(self.pos[1])]
+        rect.x += self.draw_rect_offset[0]
+        rect.y += self.draw_rect_offset[1]
+        return rect
+
+    def on_screen(self, rect):
+        return not (rect.right< 0 or rect.left > SCREEN_WIDTH or rect.bottom < 0 or rect.top > SCREEN_HEIGHT)
+            
+    def update(self): 
+        self.old_pos = list(self.pos)
+
+    def raw_draw(self):
+        draw_rect_to_cam = self.draw_rect()
+        draw_rect_to_cam.topleft = relative_to_camera(draw_rect_to_cam.topleft, self.engine.camera_position)
+
+        if not self.angle == 0:
+            surface = pg.transform.rotate(self.surface, self.angle)
+            rect = surface.get_rect()
+            rect.center = draw_rect_to_cam.center
+            pos = rect.topleft
+        else:
+            surface = self.surface
+            rect = draw_rect_to_cam
+            pos = draw_rect_to_cam.topleft
+        if self.opacity == 0:
+            return
+        elif not self.opacity == 255:
+            surface = surface.copy()
+            surface.set_alpha(self.opacity)
+
+        if self.on_screen(rect):
+            self.screen.blit(surface, pos)
+
+    def draw(self):
+        alpha = self.engine.accumulator/TARGET_DT
+        old = self.pos
+        self.pos = [
+            lerp(self.old_pos[0], self.pos[0], alpha),
+            lerp(self.old_pos[1], self.pos[1], alpha)
+        ]
+        self.raw_draw()
+        self.pos = old
+
+    def kill(self):
+        for spritelist in self.spritelists.copy():
+            spritelist.remove(self)
+
+    def add_spritelist(self, spritelist):
+        self.spritelists.append(spritelist)
+
+    def remove_spritelist(self, spritelist):
+        self.spritelists.remove(spritelist)
 
 
 DYNAMIC_TEMPLATE = [
@@ -32,10 +175,13 @@ class SpriteList:
         self.hash_tilemap = None
         self.sprites: List[Sprite] = []
 
+    def hash_point(self, point):
+        return point[0]//self.tile_size, point[1]//self.tile_size
+
     def load_hash_tilemap(self):
         self.hash_tilemap = {}
         for tile in self.sprites:
-            grid_pos = tile.pos[0]//self.tile_size, tile.pos[1]//self.tile_size
+            grid_pos = self.hash_point(tile.pos)
             self.hash_tilemap[grid_pos] = tile
 
     def append(self, sprite):
@@ -76,7 +222,7 @@ class SpriteList:
     def get_nearby_tiles_at(self, rect):
         if self.hash_tilemap is None:
             raise Exception("Hash tilemap has not been loaded yet")
-        grid_pos = rect.topleft[0]//self.tile_size, rect.topleft[1]//self.tile_size
+        grid_pos = self.hash_point(rect.topleft)
         offsets = get_offsets_from_rect(rect, self.tile_size)
         tiles = []
         for offset in offsets:
