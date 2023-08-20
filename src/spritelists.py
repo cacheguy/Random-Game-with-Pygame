@@ -6,8 +6,16 @@ from utils import get_offsets_from_rect, load_spritesheet, relative_to_camera, l
 from typing import List
 from pathlib import Path
 
-class Sprite:
+
+def init_nodes(engine):
+    Node.engine = engine
+
+class Node:
     engine = None
+
+class Sprite(Node):
+    _loaded_resources = False
+    _rotate_cache = {}
     def __init__(self, surface: pg.Surface=None, interpolate=False):
         self.screen = self.engine.screen
         self.draw_rect_offset = (0,0)
@@ -25,16 +33,26 @@ class Sprite:
 
         if surface is not None:
             self.surface = surface
-            self.size = list(self.surface.get_rect().size)
+            self.set_size_from_surface(self.surface)
         else:
             self.surface = None
             self.size = [0,0]
 
         self.spritelists = []
 
-    @classmethod
-    def set_engine(cls, engine):
-        cls.engine = engine
+        self.use_rotate_cache = False
+
+        if not self.__class__._loaded_resources:
+            self.__class__._loaded_resources = True
+            self.load_resources()
+
+    def set_size_from_surface(self, surface):
+        hitbox_rect = surface.get_bounding_rect()
+        self.size = list(hitbox_rect.size)
+        self.draw_rect_offset = -hitbox_rect.topleft[0], -hitbox_rect.topleft[1]
+
+    def load_resources(self):
+        pass
 
     @property
     def left(self):
@@ -90,6 +108,14 @@ class Sprite:
         rect.centery = value
         self.pos = list(rect.topleft)
 
+    @property
+    def angle(self):
+        return self._angle
+    
+    @angle.setter
+    def angle(self, value):
+        self._angle = value%360
+
     def rect(self) -> pg.Rect:
         """The actual rect of the sprite. Useful for collision detection and more."""
         return pg.Rect(round(self.pos[0]), round(self.pos[1]), round(self.size[0]), round(self.size[1]))
@@ -106,14 +132,22 @@ class Sprite:
         return not (rect.right< 0 or rect.left > SCREEN_WIDTH or rect.bottom < 0 or rect.top > SCREEN_HEIGHT)
             
     def update(self): 
-        self.old_pos = list(self.pos)
+        self.reset_old_pos()
 
     def raw_draw(self):
         draw_rect_to_cam = self.draw_rect()
         draw_rect_to_cam.topleft = relative_to_camera(draw_rect_to_cam.topleft, self.engine.camera_position)
 
         if not self.angle == 0:
-            surface = pg.transform.rotate(self.surface, self.angle)
+            if self.use_rotate_cache:
+                r_angle = round(self.angle)%360
+                if (info := (self.surface, r_angle)) in self._rotate_cache:
+                    surface = self.__class__._rotate_cache[info]
+                else:
+                    surface = pg.transform.rotate(self.surface, r_angle)
+                    self.__class__._rotate_cache[info] = surface
+            else:
+                surface = pg.transform.rotate(self.surface, self.angle)
             rect = surface.get_rect()
             rect.center = draw_rect_to_cam.center
             pos = rect.topleft
@@ -150,6 +184,9 @@ class Sprite:
     def remove_spritelist(self, spritelist):
         self.spritelists.remove(spritelist)
 
+    def reset_old_pos(self):
+        self.old_pos = list(self.pos)
+
 
 DYNAMIC_TEMPLATE = [
     "top_left", "top", "top_right", "top_left_right", "slope2",
@@ -169,7 +206,7 @@ def load_dynamic_surfaces():
         }
 
 
-class SpriteList:
+class SpriteList(Node):
     def __init__(self):
         self.tile_size = 16*SCALE
         self.hash_tilemap = None
@@ -241,13 +278,12 @@ class SpriteList:
             "right": not (grid_pos[0]+1, grid_pos[1]) in self.hash_tilemap
         }
 
-    def draw(self, camera_pos=None):
+    def draw(self):
         if not self.hash_tilemap is None:
-            if camera_pos is None:
-                raise TypeError("camera_pos argument required for tile grid rendering")
-            r_camera_pos = round(camera_pos[0]), round(camera_pos[1])
-            for x in range(r_camera_pos[0]//self.tile_size, (r_camera_pos[0]+SCREEN_WIDTH)//self.tile_size+1):
-                for y in range(r_camera_pos[1]//self.tile_size, (r_camera_pos[1]+SCREEN_HEIGHT)//self.tile_size+1):
+            cam_x, cam_y = self.engine.camera_position
+            r_cam_pos = round(cam_x), round(cam_y)
+            for x in range(r_cam_pos[0]//self.tile_size, (r_cam_pos[0]+SCREEN_WIDTH)//self.tile_size+1):
+                for y in range(r_cam_pos[1]//self.tile_size, (r_cam_pos[1]+SCREEN_HEIGHT)//self.tile_size+1):
                     grid_pos = x,y
                     if grid_pos in self.hash_tilemap:
                         self.hash_tilemap[grid_pos].draw()

@@ -2,8 +2,9 @@ import pygame as pg
 
 from constants import *
 from utils import *
-from sprites import Sprite, Player
+from sprites import Player
 from tilemap import Tilemap
+from spritelists import init_nodes, SpriteList
 
 import time
 import math
@@ -17,7 +18,7 @@ class Engine:
     def __init__(self):
         pg.init()
 
-        Sprite.set_engine(self)
+        init_nodes(engine=self)
         self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), vsync=False)
         pg.display.set_caption(TITLE)
         pg.display.set_icon(pg.transform.scale(pg.image.load(Path("assets/icon.png")).convert_alpha(), (32,32)))
@@ -44,9 +45,18 @@ class Engine:
             "g": False
         }
 
-        self.tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap3.json"))
-        self.player = Player()
-        self.player.centerx, self.player.bottom = self.tilemap.spawn_point
+        tilemap = Tilemap(Path("assets/tilemap_project/tilemaps/basic_tilemap3.json"))
+        self.scene = {}
+        l = tilemap.layers
+        self.scene["Projectiles"] = SpriteList()
+        self.scene["Objects"] = l["Objects"]
+        self.scene["Walls"] = l["Walls"]
+        self.scene["Offgrid"] = l["Offgrid"]
+                   
+        self.scene["Walls"].load_hash_tilemap()
+        self.scene["Walls"].set_dynamic_surfaces()
+
+        self.player = Player(*tilemap.spawn_point)
         self.camera_position = [0,0]
         self.old_camera_position = [0,0]
         self.position_camera(speed=1)  # Actual camera positions are set here
@@ -78,8 +88,8 @@ class Engine:
 
     def position_camera(self, speed=0.17):
         self.old_camera_position = list(self.camera_position)
-        self.camera_position[0] = lerp(self.camera_position[0]+SCREEN_WIDTH/2, self.player.rect().centerx, speed)
-        self.camera_position[1] = lerp(self.camera_position[1]+SCREEN_HEIGHT/2, self.player.rect().centery, speed)
+        self.camera_position[0] = lerp(self.camera_position[0]+SCREEN_WIDTH/2, self.player.centerx, speed)
+        self.camera_position[1] = lerp(self.camera_position[1]+SCREEN_HEIGHT/2, self.player.centery, speed)
         self.camera_position[0] -= SCREEN_WIDTH / 2
         self.camera_position[1] -= SCREEN_HEIGHT / 2
 
@@ -94,7 +104,8 @@ class Engine:
         #         mouse_collide = tile.point_in_tile(mouse_pos)
         #         if mouse_collide:
         #             tile.opacity = 255*0.6
-        self.tilemap.draw(self.camera_position)
+        for spritelist in self.scene.values():
+            spritelist.draw()
         self.player.draw()
 
         # grid_pos = self.player.pos[0]//64*64, self.player.pos[1]//64*64
@@ -105,7 +116,6 @@ class Engine:
         # for tile in tiles:
         #     grid_pos = relative_to_camera(tile.pos, self.camera_position)
         #     pg.draw.rect(self.screen, (0,255,0), pg.Rect(grid_pos, (64,64)), 2)
-
 
         # rect = self.player.draw_rect
         # rect.topleft = relative_to_camera(rect.topleft, self.camera_position)
@@ -131,8 +141,7 @@ class Engine:
             self.debug_text("Collisions", self.player.collisions)
             self.debug_text("On Slope", self.player.on_slope)
             self.debug_text("Jump Count", self.player.jump_count)
-            self.debug_text("Shurikens", self.player.shurikens)
-
+            self.debug_text("Time", self.player.time)
     def debug_text(self, item, value, round_floats=True):
         if isinstance(value, float) and round_floats:
             text = f"{item}: {round(value, 2)}"
@@ -196,7 +205,8 @@ class Engine:
         self.handle_events()
         if self.player.pos[1] > 3200:
             self.reset()
-        self.tilemap.update()
+        for spritelist in self.scene.values():
+            spritelist.update()
         self.player.update()
 
 

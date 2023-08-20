@@ -3,7 +3,7 @@ import pytiled_parser
 import pytiled_parser.tiled_object
 
 from constants import *
-from utils import load_spritesheet, load_image, relative_to_camera
+from utils import load_spritesheet, load_image
 from sprites import Tile, CoinTile, Sprite, Enemy, RopeTile
 from spritelists import SpriteList
 
@@ -28,12 +28,14 @@ class Tilemap:
         id_to_tile_info = {}
         for firstgid, tileset in tilemap.tilesets.items():
             if tileset.image is None:
+                # Collection of images
                 for tileid, tile in tileset.tiles.items():
                     id_to_tile_info[tileid+firstgid] = {
                         "surface": load_image(tile.image),  # TODO: Add caching
                         "properties": tile.properties,
                     }
             else:
+                # Spritesheet image
                 surfaces = load_spritesheet(tileset.image)
                 for index, surface in enumerate(surfaces):
                     id_to_tile_info[index+firstgid] = {"surface": surface, "properties": {}}
@@ -93,14 +95,3 @@ class Tilemap:
                            self.spawn_point = list(obj.coordinates)
                            self.spawn_point[0] *= SCALE
                            self.spawn_point[1] *= SCALE
-
-        self.layers["Walls"].load_hash_tilemap()
-        self.layers["Walls"].set_dynamic_surfaces()
-    
-    def update(self, *args, **kwargs):
-        for layer in self.layers.values():
-            layer.update()
-
-    def draw(self, camera_pos):
-        for layer in self.layers.values():
-            layer.draw(camera_pos)

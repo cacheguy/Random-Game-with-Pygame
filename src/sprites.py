@@ -8,6 +8,7 @@ from spritelists import Sprite, SpriteList
 from pathlib import Path
 import math
 import random
+import sys
 import time
 
 # TODO Add interpolation
@@ -63,7 +64,10 @@ class Enemy(Sprite):
 
 class Tile(Sprite):
     def __init__(self, surface: pg.Surface, pos=[0,0], properties={}, animated=False):
-        super().__init__(surface)
+        super().__init__()
+        self.surface = surface
+        self.size = [64,64]
+        self.draw_rect_offset = [0,0]
         self.properties = properties
         self.tile_type = self.properties.get("tile_type")
         self.animated = animated
@@ -141,35 +145,9 @@ DEACCELERATION = 1.15
 MAX_WALK_SPEED = 8.25
 
 class Player(Sprite):
-    def __init__(self):
+    def __init__(self, spawn_centerx, spawn_bottom):
         super().__init__()
-        s = load_spritesheet(Path("assets/player/player_idle.png"), size=24, count=4)
-        idle_surfaces = [s[0], s[0], s[1], s[2], s[3], s[3], s[2], s[1]]
-        idle_surfaces_dict = {
-            "default": idle_surfaces, 
-            "blink": self.blinkify_surfaces(idle_surfaces)
-        }
-        self.idle_anim = AnimationStates(frames_dict=idle_surfaces_dict, speed=0.15, use_RL=True)
-
-        walk_surfaces = load_spritesheet(Path("assets/player/player_walk.png"), size=24, count=10)
-        walk_surfaces_dict = {
-            "default": walk_surfaces, 
-            "blink": self.blinkify_surfaces(walk_surfaces)
-        }
-        self.walk_anim = AnimationStates(frames_dict=walk_surfaces_dict, speed=0.29, use_RL=True)
-
-        fall_surfaces = load_spritesheet(Path("assets/player/player_fall.png"), size=24, count=3)
-        fall_surfaces_dict = {
-            "default": fall_surfaces,
-            "blink": self.blinkify_surfaces(fall_surfaces)
-        }
-        self.fall_anim = AnimationStates(frames_dict=fall_surfaces_dict, speed=0.35, use_RL=True)
-
-        self.pos = [0,0]
-        self.hitbox_rect = load_image(Path("assets/player/hitbox.png")).get_bounding_rect()
-        self.size = list(self.hitbox_rect.size)
-        self.draw_rect_offset = -self.hitbox_rect.topleft[0], -self.hitbox_rect.topleft[1]
-
+        
         self.collisions = {"top": False, "left": False, "right": False, "bottom": False}
         self.face_direction = RIGHT_FACING
 
@@ -188,9 +166,44 @@ class Player(Sprite):
         self.blink = 0
         self.walking = False
         self.anim_state = "idle"
-        self.can_shoot_shuriken = 0
 
-        self.shurikens = SpriteList()
+        self.can_shoot_shuriken = True
+        self.shuriken_refresh_time = 0
+
+        self.use_rotate_cache = True
+
+        hitbox_rect = load_image(Path("assets/player/hitbox.png")).get_bounding_rect()
+        self.size = list(hitbox_rect.size)
+        self.draw_rect_offset = -hitbox_rect.topleft[0], -hitbox_rect.topleft[1]
+
+        self.centerx = spawn_centerx
+        self.bottom = spawn_bottom
+        self.time = 0
+
+    @classmethod
+    def load_resources(cls):
+        s = load_spritesheet(Path("assets/player/player_idle.png"), size=24, count=4)
+        idle_surfaces = [s[0], s[0], s[1], s[2], s[3], s[3], s[2], s[1]]
+        idle_surfaces_dict = {
+            "default": idle_surfaces, 
+            "blink": cls.blinkify_surfaces(idle_surfaces)
+        }
+        cls.idle_anim = AnimationStates(frames_dict=idle_surfaces_dict, speed=0.15, use_RL=True)
+
+        walk_surfaces = load_spritesheet(Path("assets/player/player_walk.png"), size=24, count=10)
+        walk_surfaces_dict = {
+            "default": walk_surfaces, 
+            "blink": cls.blinkify_surfaces(walk_surfaces)
+        }
+        cls.walk_anim = AnimationStates(frames_dict=walk_surfaces_dict, speed=0.29, use_RL=True)
+
+        fall_surfaces = load_spritesheet(Path("assets/player/player_fall.png"), size=24, count=3)
+        fall_surfaces_dict = {
+            "default": fall_surfaces,
+            "blink": cls.blinkify_surfaces(fall_surfaces)
+        }
+        cls.fall_anim = AnimationStates(frames_dict=fall_surfaces_dict, speed=0.35, use_RL=True)
+
     
     def move_on_god_mode(self):
         speed = 18
@@ -262,7 +275,7 @@ class Player(Sprite):
         if not self.god_mode: self.change_y += self.gravity
         if self.change_y > 30: self.change_y = 30
         self.collisions = {"top": False, "left": False, "right": False, "bottom": False}
-        walls = self.engine.tilemap.layers["Walls"]
+        walls = self.engine.scene["Walls"]
 
         self.pos[0] += self.change_x
         hit_list = self.get_collisions(walls.get_nearby_tiles_at(self.rect()))
@@ -333,18 +346,23 @@ class Player(Sprite):
         self.god_mode = self.engine.keys["g"]
         self.move_on_inputs()
 
-        if self.can_shoot_shuriken > 0:
-            self.can_shoot_shuriken -= 1
+        if self.shuriken_refresh_time > 0:
+            self.shuriken_refresh_time -= 1
+            if self.shuriken_refresh_time < 0:
+                self.shuriken_refresh_time = 0
         if not self.engine.keys["e"]:
             self.can_shoot_shuriken = True
 
-        if self.engine.keys["e"] and self.can_shoot_shuriken == 0:
-            shuriken = Shuriken((self.centerx+10, self.centery-24), self.face_direction)
-            self.shurikens.append(shuriken)
-            self.can_shoot_shuriken = 60
+        if self.engine.keys["e"] and self.can_shoot_shuriken and self.shuriken_refresh_time == 0:
+            shuriken = Shuriken(self, self.face_direction)
+            shuriken.reset_old_pos()
+            self.engine.scene["Projectiles"].append(shuriken)
+            self.can_shoot_shuriken = False
+            self.shuriken_refresh_time = 22
             self.sounds["shuriken_throw"].play()
+            self.shuriken_refresh_time
 
-        hit_list = self.get_collisions(self.engine.tilemap.layers["Objects"]) 
+        hit_list = self.get_collisions(self.engine.scene["Objects"]) 
         for obj in hit_list:
             if obj.tile_type == "spring":
                 self.bottom = obj.top
@@ -357,7 +375,6 @@ class Player(Sprite):
                     self.sounds["coin"].play()
 
         self.do_collisions()
-        self.shurikens.update()
         self.update_animation()
 
     def update_animation(self):
@@ -417,31 +434,42 @@ class Player(Sprite):
             self.surface = self.idle_anim.update(state=state, direction=self.face_direction)
 
     def draw(self):
-        self.shurikens.draw()
+        old = time.perf_counter_ns()
         super().draw()
+        self.time = time.perf_counter_ns()-old
 
 
 class Shuriken(Sprite):
     speed = 14
-    def __init__(self, pos, direction):
-        surface = load_image(Path("assets/projectiles/shuriken.png"))
-        if direction == RIGHT_FACING: surface = pg.transform.flip(surface, True, False)
-        super().__init__(surface)
-        self.pos = list(pos)
+    def __init__(self, player, direction):
+        super().__init__()
         if direction == RIGHT_FACING:
+            self.pos = [player.centerx+10, player.centery-24]
             self.change_x = 22
-            
+            self.surface = self.idle_surface
+            self.set_size_from_surface(self.surface)
         elif direction == LEFT_FACING:
+            self.pos = [player.centerx-10, player.centery-24]
             self.change_x = -22
+            self.surface = self.idle_surface_flipped
+            self.set_size_from_surface(self.surface)
         else:
             raise ValueError(f"Invalid direction: {direction}")
+            
         self.distance_traveled = 0
         self.angle = random.randint(0, 359)
         self.time_on_wall = None
+
+        self.use_rotate_cache = True
+
+    @classmethod
+    def load_resources(cls):
+        cls.idle_surface = load_image(Path("assets/projectiles/shuriken.png"))
+        cls.idle_surface_flipped = pg.transform.flip(cls.idle_surface, True, False)
         
     def update(self):
         super().update()
-        walls = self.engine.tilemap.layers["Walls"]
+        walls = self.engine.scene["Walls"]
         if not self.time_on_wall is None:
             self.time_on_wall -= 1
             if self.time_on_wall < 0:
@@ -471,3 +499,7 @@ class Shuriken(Sprite):
         self.distance_traveled += abs(self.change_x)
         if self.distance_traveled > 3200:
             self.kill()
+
+    def draw(self):
+        old = time.perf_counter_ns()
+        super().draw()

@@ -17,7 +17,7 @@ class AnimationStates:
             new_dict[RIGHT_FACING] = frames_dict
             new_dict[LEFT_FACING] = {}
             for key, value in frames_dict.items():
-                new_dict[LEFT_FACING][key] = [pg.transform.flip(surface.copy(), True, False) for surface in value]
+                new_dict[LEFT_FACING][key] = [pg.transform.flip(surface, True, False) for surface in value]
             
             self.frames_dict = new_dict
         else:
