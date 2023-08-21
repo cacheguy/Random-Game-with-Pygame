@@ -1,11 +1,10 @@
 import pygame as pg
 
-from constants import RIGHT_FACING, LEFT_FACING
+from .constants import RIGHT_FACING, LEFT_FACING
 
-from math import floor, ceil
+from math import floor
 
 
-#TODO Add finished
 class AnimationStates:
     def __init__(self, frames_dict, speed: float=0.25, use_RL: bool=False):
         # frames_dict = {

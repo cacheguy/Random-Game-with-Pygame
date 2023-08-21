@@ -1,7 +1,8 @@
 import pygame as pg
+import pygplus as pgp
 
-from constants import *
-from utils import get_offsets_from_rect, load_spritesheet, relative_to_camera, lerp
+from .constants import *
+from .utils import get_offsets_from_rect, load_spritesheet, lerp
 
 from typing import List
 from pathlib import Path
@@ -16,13 +17,12 @@ class Node:
 class Sprite(Node):
     _loaded_resources = False
     _rotate_cache = {}
-    def __init__(self, surface: pg.Surface=None, interpolate=False):
+    def __init__(self, surface: pg.Surface=None):
         self.screen = self.engine.screen
         self.draw_rect_offset = (0,0)
         self.shape_type = None
 
-        self.change_x = 0
-        self.change_y = 0
+        self.movement = pg.Vector2(0,0)
 
         self.opacity = 255
         self.angle = 0
@@ -129,17 +129,19 @@ class Sprite(Node):
         return rect
 
     def on_screen(self, rect):
-        return not (rect.right< 0 or rect.left > SCREEN_WIDTH or rect.bottom < 0 or rect.top > SCREEN_HEIGHT)
+        return not (rect.right< 0 or rect.left > self.engine.screen_width or 
+                    rect.bottom < 0 or rect.top > self.engine.screen_height)
             
     def update(self): 
         self.reset_old_pos()
 
     def raw_draw(self):
         draw_rect_to_cam = self.draw_rect()
-        draw_rect_to_cam.topleft = relative_to_camera(draw_rect_to_cam.topleft, self.engine.camera_position)
+        draw_rect_to_cam.topleft = self.engine.rel_to_camera(draw_rect_to_cam.topleft)
 
         if not self.angle == 0:
             if self.use_rotate_cache:
+                # Cache the rotated surfaces for faster rotations
                 r_angle = round(self.angle)%360
                 if (info := (self.surface, r_angle)) in self._rotate_cache:
                     surface = self.__class__._rotate_cache[info]
@@ -165,12 +167,13 @@ class Sprite(Node):
             self.screen.blit(surface, pos)
 
     def draw(self):
-        alpha = self.engine.accumulator/TARGET_DT
+        alpha = self.engine.accumulator/pgp.TARGET_DT
         old = self.pos
-        self.pos = [
-            lerp(self.old_pos[0], self.pos[0], alpha),
-            lerp(self.old_pos[1], self.pos[1], alpha)
-        ]
+        if pgp.FIXED_TIMESTEP_SETTINGS["interpolate"]:
+            self.pos = [
+                lerp(self.old_pos[0], self.pos[0], alpha),
+                lerp(self.old_pos[1], self.pos[1], alpha)
+            ]
         self.raw_draw()
         self.pos = old
 
@@ -208,7 +211,7 @@ def load_dynamic_surfaces():
 
 class SpriteList(Node):
     def __init__(self):
-        self.tile_size = 16*SCALE
+        self.tile_size = 16*pgp.SCALE
         self.hash_tilemap = None
         self.sprites: List[Sprite] = []
 
@@ -282,8 +285,9 @@ class SpriteList(Node):
         if not self.hash_tilemap is None:
             cam_x, cam_y = self.engine.camera_position
             r_cam_pos = round(cam_x), round(cam_y)
-            for x in range(r_cam_pos[0]//self.tile_size, (r_cam_pos[0]+SCREEN_WIDTH)//self.tile_size+1):
-                for y in range(r_cam_pos[1]//self.tile_size, (r_cam_pos[1]+SCREEN_HEIGHT)//self.tile_size+1):
+            for x in range(r_cam_pos[0]//self.tile_size, (r_cam_pos[0]+Node.engine.screen_width)//self.tile_size+1):
+                for y in range(r_cam_pos[1]//self.tile_size, (r_cam_pos[1]+Node.engine.screen_height)//
+                               self.tile_size+1):
                     grid_pos = x,y
                     if grid_pos in self.hash_tilemap:
                         self.hash_tilemap[grid_pos].draw()

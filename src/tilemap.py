@@ -1,14 +1,11 @@
-import pygame as pg
+import pygplus as pgp
+
 import pytiled_parser
 import pytiled_parser.tiled_object
 
-from constants import *
-from utils import load_spritesheet, load_image
-from sprites import Tile, CoinTile, Sprite, Enemy, RopeTile
-from spritelists import SpriteList
+from sprites import Tile, CoinTile, Enemy, RopeTile
 
 from pathlib import Path
-import time
 
 DEFAULT_CLASS = Tile
 TYPES_TO_TILES = {
@@ -31,12 +28,12 @@ class Tilemap:
                 # Collection of images
                 for tileid, tile in tileset.tiles.items():
                     id_to_tile_info[tileid+firstgid] = {
-                        "surface": load_image(tile.image),  # TODO: Add caching
+                        "surface": pgp.load_image(tile.image),  # TODO: Add caching
                         "properties": tile.properties,
                     }
             else:
                 # Spritesheet image
-                surfaces = load_spritesheet(tileset.image)
+                surfaces = pgp.load_spritesheet(tileset.image)
                 for index, surface in enumerate(surfaces):
                     id_to_tile_info[index+firstgid] = {"surface": surface, "properties": {}}
                     for tileid, tile in tileset.tiles.items():
@@ -44,7 +41,7 @@ class Tilemap:
                             id_to_tile_info[index+firstgid]["properties"] = tile.properties
         self.layers = {}
         for layer in tilemap.layers:
-            self.layers[layer.name] = SpriteList()
+            self.layers[layer.name] = pgp.sprite.SpriteList()
             if isinstance(layer, pytiled_parser.TileLayer):
                 tiles_data = layer.data
                 for y, row in enumerate(tiles_data):
@@ -60,8 +57,9 @@ class Tilemap:
                             tile_type = properties.get("tile_type")
                             if TYPES_TO_TILES.get(tile_type):
                                 custom_class = TYPES_TO_TILES.get(tile_type)["class"]
-                        pos = [x*tile_size*SCALE, 
-                               y*tile_size*SCALE-(tile_info["surface"].get_height()-tile_size*SCALE)]
+                        pos = [x*tile_size*pgp.SCALE, 
+                               y*tile_size*pgp.SCALE-(tile_info["surface"].get_height()-
+                                                                tile_size*pgp.SCALE)]
                         tile_object = custom_class(surface=tile_info["surface"], 
                                                    pos=pos, 
                                                    properties=properties)
@@ -79,19 +77,19 @@ class Tilemap:
                         if properties.get("tile_type") == "green_ninja":
                             b_left_id = properties["boundary_left"]
                             b_left_obj = [obj for obj in layer.tiled_objects if obj.id == b_left_id][0]
-                            b_left_x = b_left_obj.coordinates[0] * SCALE
+                            b_left_x = b_left_obj.coordinates[0] * pgp.SCALE
                             
                             b_right_id = properties["boundary_right"]
                             b_right_obj = [obj for obj in layer.tiled_objects if obj.id == b_right_id][0]
-                            b_right_x = b_right_obj.coordinates[0] * SCALE
+                            b_right_x = b_right_obj.coordinates[0] * pgp.SCALE
 
                             sprite = Enemy(b_left_x, b_right_x, id_to_tile_info[obj.gid]["surface"])
                             sprite.left, sprite.bottom = list(obj.coordinates)
-                            sprite.left *= SCALE
-                            sprite.bottom *= SCALE
+                            sprite.left *= pgp.SCALE
+                            sprite.bottom *= pgp.SCALE
                             self.layers[layer.name].append(sprite)
                    elif isinstance(obj, pytiled_parser.tiled_object.Point):
                        if "spawn" in obj.properties:
                            self.spawn_point = list(obj.coordinates)
-                           self.spawn_point[0] *= SCALE
-                           self.spawn_point[1] *= SCALE
+                           self.spawn_point[0] *= pgp.SCALE
+                           self.spawn_point[1] *= pgp.SCALE

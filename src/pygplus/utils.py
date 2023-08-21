@@ -1,9 +1,11 @@
 import pygame as pg
 
+from .constants import SCALE
+
 from pathlib import Path
 import time
 
-from constants import *
+
 
 def load_image(filename: Path) -> pg.Surface:
     surface = pg.image.load(filename).convert()
@@ -40,9 +42,6 @@ def load_spritesheet(filename: Path, size=16, count: int = -1):
         if i >= count and not count==-1: break
 
     return surfaces
-
-def relative_to_camera(pos, camera_position):
-    return [pos[0] - camera_position[0], pos[1] - camera_position[1]]
 
 def lerp(num1, num2, alpha):
     return num1 + (alpha * (num2 - num1))
